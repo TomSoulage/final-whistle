@@ -59,12 +59,12 @@ describe('GithubOidcStack', () => {
   });
 
   it('lets only pull requests of this repository assume the pull request role', () => {
-    expect(PULL_REQUEST_SUBJECT).toBe('repo:TomSoulage/final-whistle:pull_request');
+    expect(PULL_REQUEST_SUBJECT).toBe('repo:TomSoulage@76871522/final-whistle@1440617490:pull_request');
     expectTrustedSubject(PULL_REQUEST_ROLE_NAME, PULL_REQUEST_SUBJECT);
   });
 
   it('lets only the main branch of this repository assume the deploy role', () => {
-    expect(MAIN_BRANCH_SUBJECT).toBe('repo:TomSoulage/final-whistle:ref:refs/heads/main');
+    expect(MAIN_BRANCH_SUBJECT).toBe('repo:TomSoulage@76871522/final-whistle@1440617490:ref:refs/heads/main');
     expectTrustedSubject(DEPLOY_ROLE_NAME, MAIN_BRANCH_SUBJECT);
   });
 

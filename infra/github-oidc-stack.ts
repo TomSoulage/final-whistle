@@ -4,7 +4,9 @@ import type { Construct } from 'constructs';
 
 const GITHUB_OIDC_HOST = 'token.actions.githubusercontent.com';
 const GITHUB_OIDC_AUDIENCE = 'sts.amazonaws.com';
-const GITHUB_REPOSITORY = 'TomSoulage/final-whistle';
+// GitHub's immutable subject format: owner and repository names carry their numeric ids,
+// so a repository recreated under the same name cannot match.
+const GITHUB_REPOSITORY = 'TomSoulage@76871522/final-whistle@1440617490';
 const CDK_BOOTSTRAP_QUALIFIER = 'hnb659fds';
 
 export const PULL_REQUEST_SUBJECT = `repo:${GITHUB_REPOSITORY}:pull_request`;
