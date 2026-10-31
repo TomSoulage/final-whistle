@@ -11,7 +11,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "synth": "cdk synth --quiet"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
