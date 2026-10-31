@@ -11,7 +11,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "synth": "cdk synth --quiet"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
@@ -19,8 +20,13 @@
     "@commitlint/types": "21.2.3",
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.2",
+    "aws-cdk": "2.1146.1",
+    "aws-cdk-lib": "2.274.0",
+    "cdk-nag": "3.0.2",
+    "constructs": "10.8.1",
     "eslint": "10.14.0",
     "jiti": "2.7.0",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
     "vitest": "5.0.5"
