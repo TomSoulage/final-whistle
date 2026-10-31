@@ -39,6 +39,7 @@ Log of the project's structural choices. Each decision has a stable identifier (
 - **D15. Safe deployment: versions, `prod` alias, smoke test, automatic rollback.** Each deployment publishes new Lambda versions; the alias moves only if the smoke test passes.
 - **D16. Every change goes through a pull request.** `main` is protected, squash merge only, all required checks must pass.
 - **D20. Toolchain: npm, TypeScript 6.0, ESLint, Vitest, commitlint.** Node 24 (`.nvmrc`). TypeScript stays on 6.0 because typescript-eslint does not support 7.x yet. ESLint enforces the measurable code rules of `CLAUDE.md`. Commitlint checks the PR title, since it becomes the squash commit, as well as each commit. Actions are restricted to GitHub-owned ones plus an explicit allowlist in the repository settings (currently `gitleaks/gitleaks-action`), and must be pinned to a full commit SHA; Dependabot keeps them up to date. A new third-party action needs an allowlist entry first.
+- **D21. Dependabot sorts updates by risk.** Minor and patch updates are grouped into one weekly pull request, which should stay green. Each major update gets its own pull request, so a breaking one never blocks the safe ones. New versions are proposed only after a 7-day cooldown, to avoid compromised releases that get pulled within days. Two majors are ignored because their version is a decision, not a default: `typescript` (revisit when typescript-eslint supports 7.x) and `@types/node` (revisit when the Lambda Node.js runtime changes).
 
 ### Cost and repository
 
