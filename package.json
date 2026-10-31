@@ -1,0 +1,18 @@
+{
+  "name": "final-whistle",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Event-driven serverless pipeline on AWS that detects sports results and pushes them to Telegram",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}
