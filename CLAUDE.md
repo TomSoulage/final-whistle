@@ -44,7 +44,7 @@ type(scope): subject
 - **Errors are handled, never swallowed**: no empty `catch`, error messages say what failed and for which match.
 - Functions < 30 lines, nesting ≤ 3 levels (early returns), named `UPPER_SNAKE_CASE` constants instead of magic values, no dead or commented-out code, no stray `console.log`.
 
-The measurable rules will be enforced by ESLint in CI (`max-lines-per-function`, `max-depth`, `no-magic-numbers`, `no-param-reassign`, `prefer-const`, `no-unused-vars`, `no-console`, `no-empty`).
+The measurable rules are enforced by ESLint in CI (`max-lines-per-function`, `max-depth`, `no-magic-numbers`, `no-param-reassign`, `prefer-const`, `no-unused-vars`, `no-console`, `no-empty`).
 
 ## Security and cost
 
