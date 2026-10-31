@@ -19,7 +19,7 @@ type(scope): subject
 
 - **type**: `feat`, `fix`, `docs`, `refactor`, `test`, `ci`, `build`, `chore`, `perf`, `style`, `revert`.
 - **scope** (optional, lowercase): `planner`, `fetch-results`, `notify`, `infra`, `ci`, `docs`…
-- **subject**: imperative, lowercase, no final period, header ≤ 72 characters.
+- **subject**: imperative, lowercase, no final period, header ≤ 100 characters (commitlint default).
 - Small commits, one intent each. A breaking change is marked with `!` (`feat(notify)!: …`).
 
 ## Language

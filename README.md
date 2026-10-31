@@ -54,6 +54,9 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 ## Status
 
 Work in progress: the diagram shows the target architecture, built one step at a time.
+
+- Done: TypeScript project and pull request checks (lint, types, unit tests, commitlint, Gitleaks), Dependabot updates.
+- Next: the AWS deployment pipeline, then the Lambdas.
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 
 ## Design decisions
