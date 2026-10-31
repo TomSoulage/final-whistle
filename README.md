@@ -55,7 +55,7 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 
 Work in progress: the diagram shows the target architecture, built one step at a time.
 
-- Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates.
+- Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules.
 - Next: the AWS deployment pipeline, then the Lambdas.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
