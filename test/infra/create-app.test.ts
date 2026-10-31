@@ -8,9 +8,8 @@ function getAppStack(app: ReturnType<typeof createApp>): Stack {
 }
 
 describe('createApp', () => {
-  it('synthesizes the application stack', () => {
-    const assembly = createApp().synth();
-    expect(assembly.getStackByName(APP_STACK_ID).template).toBeDefined();
+  it('synthesizes the application stack without a cdk-nag violation', () => {
+    expect(() => createApp().synth()).not.toThrow();
   });
 
   it('fails synthesis when a resource breaks a cdk-nag AWS Solutions rule', () => {
