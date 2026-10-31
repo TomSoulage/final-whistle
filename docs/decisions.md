@@ -38,6 +38,7 @@ Log of the project's structural choices. Each decision has a stable identifier (
 - **D14. Deployment from GitHub Actions through OIDC.** GitHub assumes a short-lived AWS role: no access key is stored anywhere.
 - **D15. Safe deployment: versions, `prod` alias, smoke test, automatic rollback.** Each deployment publishes new Lambda versions; the alias moves only if the smoke test passes.
 - **D16. Every change goes through a pull request.** `main` is protected, squash merge only, all required checks must pass.
+- **D20. Toolchain: npm, TypeScript 6.0, ESLint, Vitest, commitlint.** Node 24 (`.nvmrc`). TypeScript stays on 6.0 because typescript-eslint does not support 7.x yet. ESLint enforces the measurable code rules of `CLAUDE.md`. Commitlint checks the PR title, since it becomes the squash commit, as well as each commit. Third-party actions are pinned to a commit SHA and kept up to date by Dependabot.
 
 ### Cost and repository
 
