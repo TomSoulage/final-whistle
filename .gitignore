@@ -7,7 +7,6 @@ dist/
 
 # CDK
 cdk.out/
-cdk.context.json
 
 # Environment and secrets
 .env
