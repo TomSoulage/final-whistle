@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "synth": "cdk synth --quiet"
+    "synth": "cdk synth --quiet",
+    "diff": "cdk diff --method=template --no-color"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
