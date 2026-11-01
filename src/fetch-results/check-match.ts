@@ -5,7 +5,9 @@ import {
   type MatchResult,
 } from '../results/match-result.js';
 import { describeError, type LogFields, type Logger } from '../shared/logger.js';
-import { parseMatchKey } from './parse-match-key.js';
+import { parseMatchKey } from '../results/parse-match-key.js';
+
+const INPUT_NAME = 'fetch-results input';
 
 export interface CheckMatchDependencies {
   readonly getMatchResult: (key: MatchKey) => Promise<MatchLookup>;
@@ -29,7 +31,7 @@ export async function checkMatch(input: unknown, dependencies: CheckMatchDepende
 
 function parseInput(input: unknown, dependencies: CheckMatchDependencies): MatchKey {
   try {
-    return parseMatchKey(input);
+    return parseMatchKey(input, INPUT_NAME);
   } catch (error) {
     dependencies.createLogger({}).error('invalid input', { input, error: describeError(error) });
     throw error;

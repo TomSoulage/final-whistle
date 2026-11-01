@@ -23,7 +23,7 @@ It is also a side project to practise serverless and event-driven design on a re
    2. **sends** it to Telegram,
    3. **remembers** it in DynamoDB, only once the message has gone out.
 
-The bot token lives in SSM Parameter Store and is read once, at cold start.
+The bot token and the chat id live in SSM Parameter Store and are read once per Lambda instance.
 
 ## Reliability
 
@@ -56,8 +56,9 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 Work in progress: the diagram shows the target architecture, built one step at a time.
 
 - Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles, a `cdk diff` of each pull request and a `cdk deploy` on each merge to `main`.
-- Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished. Nothing invokes it or consumes its events yet.
-- Next: `notify`, the planner and its one-time schedules, then the DLQ, the alarms, the smoke test and the `prod` alias rollback.
+- Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished.
+- Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it. Nothing invokes `fetch-results` yet.
+- Next: the planner and its one-time schedules, then the DLQ, the alarms, the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 
