@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "synth": "cdk synth --quiet",
-    "diff": "cdk diff --method=template --no-color"
+    "diff": "cdk diff --method=template --no-color",
+    "deploy": "cdk deploy FinalWhistle --require-approval never --no-color"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
