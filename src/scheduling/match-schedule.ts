@@ -14,11 +14,15 @@ const SCHEDULE_NAME_PREFIX = 'match-';
 /** 128 bits of SHA-256: a collision between two matches is out of reach. */
 const SCHEDULE_NAME_HASH_LENGTH = 32;
 
-/** Where a match check goes: the schedule group, the fetch-results function and the role Scheduler invokes it with. */
+/**
+ * Where a match check goes: the schedule group, the fetch-results function, the role Scheduler invokes it with,
+ * and the queue Scheduler sends the check to when it cannot invoke the function (D37).
+ */
 export interface MatchCheckTarget {
   readonly scheduleGroupName: string;
   readonly functionArn: string;
   readonly roleArn: string;
+  readonly deadLetterQueueArn: string;
 }
 
 export type SendCreateSchedule = (command: CreateScheduleCommand) => Promise<CreateScheduleCommandOutput>;
@@ -49,7 +53,12 @@ export function buildMatchCheckCommand(
     ScheduleExpressionTimezone: PARIS_TIME_ZONE,
     FlexibleTimeWindow: { Mode: FlexibleTimeWindowMode.OFF },
     ActionAfterCompletion: ActionAfterCompletion.DELETE,
-    Target: { Arn: target.functionArn, RoleArn: target.roleArn, Input: JSON.stringify(check) },
+    Target: {
+      Arn: target.functionArn,
+      RoleArn: target.roleArn,
+      Input: JSON.stringify(check),
+      DeadLetterConfig: { Arn: target.deadLetterQueueArn },
+    },
   });
 }
 
