@@ -9,11 +9,21 @@ import {
   PULL_REQUEST_SUBJECT,
 } from '../../infra/github-oidc-stack.js';
 
+const TEST_ACCOUNT = '123456789012';
+const TEST_REGION = 'eu-north-1';
+
 let template: Template;
 
 beforeAll(() => {
-  template = Template.fromStack(new GithubOidcStack(new App(), 'TestGithubOidc'));
+  // As in cdk.json, so the partition renders as 'aws' and the role ARNs are plain strings.
+  const app = new App({ context: { '@aws-cdk/core:enablePartitionLiterals': true } });
+  const env = { account: TEST_ACCOUNT, region: TEST_REGION };
+  template = Template.fromStack(new GithubOidcStack(app, 'TestGithubOidc', { env }));
 });
+
+function getBootstrapRoleArn(roleKind: string): string {
+  return `arn:aws:iam::${TEST_ACCOUNT}:role/cdk-hnb659fds-${roleKind}-role-${TEST_ACCOUNT}-${TEST_REGION}`;
+}
 
 function getRoleLogicalId(roleName: string): string {
   const roles = template.findResources('AWS::IAM::Role', { Properties: { RoleName: roleName } });
@@ -24,11 +34,15 @@ function getRoleLogicalId(roleName: string): string {
   return logicalId;
 }
 
-function getAssumableResources(roleName: string): string {
-  const policies = template.findResources('AWS::IAM::Policy', {
-    Properties: { Roles: [{ Ref: getRoleLogicalId(roleName) }] },
+function expectAssumableRoles(roleName: string, roleArns: string[]): void {
+  // IAM writes a single resource as a string and several as a list.
+  const resource = roleArns.length === 1 ? roleArns[0] : roleArns;
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    Roles: [{ Ref: getRoleLogicalId(roleName) }],
+    PolicyDocument: {
+      Statement: [{ Effect: 'Allow', Action: 'sts:AssumeRole', Resource: resource }],
+    },
   });
-  return JSON.stringify(Object.values(policies));
 }
 
 function expectTrustedSubject(roleName: string, subject: string): void {
@@ -69,24 +83,18 @@ describe('GithubOidcStack', () => {
   });
 
   it('limits the pull request role to the read-only CDK lookup role', () => {
-    const resources = getAssumableResources(PULL_REQUEST_ROLE_NAME);
-    expect(resources).toContain('-lookup-role-');
-    expect(resources).not.toContain('-deploy-role-');
-    expect(resources).not.toContain('-file-publishing-role-');
+    expectAssumableRoles(PULL_REQUEST_ROLE_NAME, [getBootstrapRoleArn('lookup')]);
   });
 
-  it('lets the deploy role assume the CDK lookup, deploy and file publishing roles', () => {
-    const resources = getAssumableResources(DEPLOY_ROLE_NAME);
-    expect(resources).toContain('-lookup-role-');
-    expect(resources).toContain('-deploy-role-');
-    expect(resources).toContain('-file-publishing-role-');
+  it('lets the deploy role assume only the CDK lookup, deploy and file publishing roles', () => {
+    expectAssumableRoles(DEPLOY_ROLE_NAME, [
+      getBootstrapRoleArn('lookup'),
+      getBootstrapRoleArn('deploy'),
+      getBootstrapRoleArn('file-publishing'),
+    ]);
   });
 
-  it('grants only sts:AssumeRole, never a wildcard', () => {
-    const policies = JSON.stringify(template.findResources('AWS::IAM::Policy'));
-    expect(policies).not.toContain('"*"');
-    template.allResourcesProperties('AWS::IAM::Policy', {
-      PolicyDocument: { Statement: [Match.objectLike({ Action: 'sts:AssumeRole' })] },
-    });
+  it('has no other IAM policy than the two roles above', () => {
+    template.resourceCountIs('AWS::IAM::Policy', 2);
   });
 });

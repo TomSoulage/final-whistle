@@ -1,4 +1,4 @@
-import { Aws, CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import { OidcProviderNative, OpenIdConnectPrincipal, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
@@ -23,9 +23,9 @@ interface GithubRoleProps {
   readonly description: string;
 }
 
-/** ARN of a role created by `cdk bootstrap` in this stack's account and region. */
-function getCdkBootstrapRoleArn(roleKind: CdkBootstrapRoleKind): string {
-  return `arn:${Aws.PARTITION}:iam::${Aws.ACCOUNT_ID}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${roleKind}-role-${Aws.ACCOUNT_ID}-${Aws.REGION}`;
+/** ARN of a role created by `cdk bootstrap` in the stack's account and region. */
+function getCdkBootstrapRoleArn(stack: Stack, roleKind: CdkBootstrapRoleKind): string {
+  return `arn:${stack.partition}:iam::${stack.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${roleKind}-role-${stack.account}-${stack.region}`;
 }
 
 /**
@@ -71,7 +71,7 @@ export class GithubOidcStack extends Stack {
     role.addToPolicy(
       new PolicyStatement({
         actions: ['sts:AssumeRole'],
-        resources: props.bootstrapRoles.map(getCdkBootstrapRoleArn),
+        resources: props.bootstrapRoles.map((roleKind) => getCdkBootstrapRoleArn(this, roleKind)),
       }),
     );
     new CfnOutput(this, `${id}Arn`, { value: role.roleArn });
