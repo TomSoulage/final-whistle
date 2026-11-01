@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { EventBus } from 'aws-cdk-lib/aws-events';
+import type { IQueue } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 import { EVENT_BUS_NAME_VARIABLE } from '../src/fetch-results/environment.js';
 import { PipelineFunction } from './pipeline-function.js';
@@ -13,6 +14,7 @@ const MEMORY_SIZE_MB = 256;
 
 export interface FetchResultsFunctionProps {
   readonly eventBus: EventBus;
+  readonly failureQueue: IQueue;
 }
 
 /** The fetch-results Lambda: on top of its logs, it may only publish on the bus (and schedule its next attempt, see the stack). */
@@ -24,6 +26,7 @@ export class FetchResultsFunction extends PipelineFunction {
       timeoutSeconds: TIMEOUT_SECONDS,
       memorySizeMb: MEMORY_SIZE_MB,
       environment: { [EVENT_BUS_NAME_VARIABLE]: props.eventBus.eventBusName },
+      failureQueue: props.failureQueue,
     });
     props.eventBus.grantPutEventsTo(this.lambdaFunction);
   }

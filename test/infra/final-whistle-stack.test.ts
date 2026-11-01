@@ -40,6 +40,20 @@ const LOG_WRITE_STATEMENT = (constructId: string) => ({
   Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Logs::LogGroup', constructId), 'Arn'] },
 });
 
+function getQueueArn(): unknown {
+  return { 'Fn::GetAtt': [getLogicalId('AWS::SQS::Queue'), 'Arn'] };
+}
+
+/** What Lambda needs to send a failed invocation to the failure queue, and nothing more. */
+const FAILURE_SEND_STATEMENT = () => ({
+  Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+  Effect: 'Allow',
+  Resource: getQueueArn(),
+});
+
+/** What Scheduler needs to send an invocation it could not make to the failure queue. */
+const SCHEDULER_FAILURE_SEND_STATEMENT = () => ({ Action: 'sqs:SendMessage', Effect: 'Allow', Resource: getQueueArn() });
+
 /** Create schedules in the match check group only, and pass their role to Scheduler only. */
 const SCHEDULE_CHECK_STATEMENTS = () => [
   {
@@ -99,6 +113,45 @@ describe('FinalWhistleStack', () => {
   });
 });
 
+describe('failure queue', () => {
+  it('keeps failures for 14 days, encrypted by SQS, reachable over HTTPS only', () => {
+    template.resourceCountIs('AWS::SQS::Queue', 1);
+    template.hasResourceProperties('AWS::SQS::Queue', { MessageRetentionPeriod: 1_209_600, SqsManagedSseEnabled: true });
+    template.hasResourceProperties('AWS::SQS::QueuePolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Effect: 'Deny', Condition: { Bool: { 'aws:SecureTransport': 'false' } } }),
+        ]),
+      },
+    });
+  });
+
+  it.each(['FetchResults', 'Notify', 'Planner'])('receives what %s still fails after its retries', (constructId) => {
+    template.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+      FunctionName: { Ref: getLogicalId('AWS::Lambda::Function', constructId) },
+      DestinationConfig: { OnFailure: { Destination: getQueueArn() } },
+    });
+  });
+
+  it('receives what the MatchFinished rule cannot deliver to notify, and only from that rule', () => {
+    template.hasResourceProperties('AWS::Events::Rule', {
+      Targets: [Match.objectLike({ DeadLetterConfig: { Arn: getQueueArn() } })],
+    });
+    template.hasResourceProperties('AWS::SQS::QueuePolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'sqs:SendMessage',
+            Effect: 'Allow',
+            Principal: { Service: 'events.amazonaws.com' },
+            Condition: { ArnEquals: { 'aws:SourceArn': { 'Fn::GetAtt': [getLogicalId('AWS::Events::Rule'), 'Arn'] } } },
+          }),
+        ]),
+      },
+    });
+  });
+});
+
 describe('fetch-results', () => {
   it('runs on Node.js 24, arm64, 256 MB, with the bus and where to schedule its next attempt in its environment', () => {
     expect(getProperties('AWS::Lambda::Function', 'FetchResults')).toMatchObject({
@@ -111,15 +164,17 @@ describe('fetch-results', () => {
           EVENT_BUS_NAME: { Ref: getLogicalId('AWS::Events::EventBus') },
           MATCH_CHECK_SCHEDULE_GROUP: 'final-whistle-match-checks',
           MATCH_CHECK_ROLE_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+          MATCH_CHECK_DEAD_LETTER_QUEUE_ARN: getQueueArn(),
         },
       },
       LoggingConfig: { LogGroup: { Ref: getLogicalId('AWS::Logs::LogGroup', 'FetchResults') } },
     });
   });
 
-  it('may only write its logs, publish on its bus, and schedule its next attempt', () => {
+  it('may only write its logs, send its failures, publish on its bus, and schedule its next attempt', () => {
     expectPolicyStatements('FetchResults', [
       LOG_WRITE_STATEMENT('FetchResults'),
+      FAILURE_SEND_STATEMENT(),
       {
         Action: 'events:PutEvents',
         Effect: 'Allow',
@@ -148,9 +203,10 @@ describe('notify', () => {
     });
   });
 
-  it('may only write its logs, read and write one item of its table, and read the two Telegram parameters', () => {
+  it('may only write its logs, send its failures, read and write one item of its table, and read the two Telegram parameters', () => {
     expectPolicyStatements('Notify', [
       LOG_WRITE_STATEMENT('Notify'),
+      FAILURE_SEND_STATEMENT(),
       {
         Action: ['dynamodb:GetItem', 'dynamodb:PutItem'],
         Effect: 'Allow',
@@ -203,7 +259,7 @@ describe('match checks', () => {
     template.hasResourceProperties('AWS::Scheduler::ScheduleGroup', { Name: 'final-whistle-match-checks' });
   });
 
-  it('invoke fetch-results with a role that can do nothing else', () => {
+  it('invoke fetch-results with a role that may otherwise only send a check it could not deliver to the failure queue', () => {
     expect(getProperties('AWS::IAM::Role', 'MatchChecks')).toMatchObject({ AssumeRolePolicyDocument: SCHEDULER_TRUST });
     expectPolicyStatements('MatchChecks', [
       {
@@ -211,6 +267,7 @@ describe('match checks', () => {
         Effect: 'Allow',
         Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'FetchResults'), 'Arn'] },
       },
+      SCHEDULER_FAILURE_SEND_STATEMENT(),
     ]);
   });
 });
@@ -227,17 +284,22 @@ describe('planner', () => {
           MATCH_CHECK_SCHEDULE_GROUP: 'final-whistle-match-checks',
           MATCH_CHECK_FUNCTION_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'FetchResults'), 'Arn'] },
           MATCH_CHECK_ROLE_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+          MATCH_CHECK_DEAD_LETTER_QUEUE_ARN: getQueueArn(),
         },
       },
       LoggingConfig: { LogGroup: { Ref: getLogicalId('AWS::Logs::LogGroup', 'Planner') } },
     });
   });
 
-  it('may only write its logs, create schedules in the match check group, and pass their role to Scheduler', () => {
-    expectPolicyStatements('PlannerRoleDefaultPolicy', [LOG_WRITE_STATEMENT('Planner'), ...SCHEDULE_CHECK_STATEMENTS()]);
+  it('may only write its logs, send its failures, create schedules in the match check group, and pass their role to Scheduler', () => {
+    expectPolicyStatements('PlannerRoleDefaultPolicy', [
+      LOG_WRITE_STATEMENT('Planner'),
+      FAILURE_SEND_STATEMENT(),
+      ...SCHEDULE_CHECK_STATEMENTS(),
+    ]);
   });
 
-  it('runs every day at 10:00 Paris time, from a schedule outside the match check group', () => {
+  it('runs every day at 10:00 Paris time, from a schedule outside the match check group, with the failure queue as its DLQ', () => {
     template.resourceCountIs('AWS::Scheduler::Schedule', 1);
     template.hasResourceProperties('AWS::Scheduler::Schedule', {
       ScheduleExpression: 'cron(0 10 * * ? *)',
@@ -246,17 +308,19 @@ describe('planner', () => {
       Target: Match.objectLike({
         Arn: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'Planner'), 'Arn'] },
         RoleArn: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'PlannerMorningScheduleRole'), 'Arn'] },
+        DeadLetterConfig: { Arn: getQueueArn() },
       }),
     });
   });
 
-  it('is run by a role that may only invoke the planner', () => {
+  it('is run by a role that may only invoke the planner, or send a run it could not make to the failure queue', () => {
     expect(getProperties('AWS::IAM::Role', 'PlannerMorningScheduleRole')).toMatchObject({
       AssumeRolePolicyDocument: SCHEDULER_TRUST,
     });
     const plannerArn = { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'Planner'), 'Arn'] };
     expectPolicyStatements('PlannerMorningScheduleRole', [
       { Action: 'lambda:InvokeFunction', Effect: 'Allow', Resource: [plannerArn, { 'Fn::Join': ['', [plannerArn, ':*']] }] },
+      SCHEDULER_FAILURE_SEND_STATEMENT(),
     ]);
   });
 });
