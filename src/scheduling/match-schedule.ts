@@ -6,7 +6,8 @@ import {
   FlexibleTimeWindowMode,
   type CreateScheduleCommandOutput,
 } from '@aws-sdk/client-scheduler';
-import { buildMatchId, type MatchKey } from '../results/match-result.js';
+import { buildMatchId } from '../results/match-result.js';
+import type { MatchCheck } from './match-check.js';
 import { formatParisWallClock, PARIS_TIME_ZONE, type ParisWallClock } from './paris-time.js';
 
 const SCHEDULE_NAME_PREFIX = 'match-';
@@ -22,33 +23,33 @@ export interface MatchCheckTarget {
 
 export type SendCreateSchedule = (command: CreateScheduleCommand) => Promise<CreateScheduleCommandOutput>;
 
-/** `already-scheduled`: a schedule with this name exists, e.g. when the planner runs twice on the same day. */
+/** `already-scheduled`: a schedule with this name exists, e.g. when a run is retried after creating it. */
 export type ScheduleOutcome = 'created' | 'already-scheduled';
 
 /**
  * Schedule names allow only letters, digits, `-`, `_` and `.`, while team names have accents and spaces:
- * the name is a hash of the match id, the same on every run, so a match is never scheduled twice.
+ * the name is a hash of the match id plus the attempt, the same on every run, so no attempt is scheduled twice.
  */
-export function buildScheduleName(key: MatchKey): string {
-  const hash = createHash('sha256').update(buildMatchId(key)).digest('hex');
-  return `${SCHEDULE_NAME_PREFIX}${hash.slice(0, SCHEDULE_NAME_HASH_LENGTH)}`;
+export function buildScheduleName(check: MatchCheck): string {
+  const hash = createHash('sha256').update(buildMatchId(check)).digest('hex');
+  return `${SCHEDULE_NAME_PREFIX}${hash.slice(0, SCHEDULE_NAME_HASH_LENGTH)}-${String(check.attempt)}`;
 }
 
-/** A one-time schedule that invokes fetch-results with the match key (D28), then deletes itself. */
+/** A one-time schedule that invokes fetch-results with the match check (D28), then deletes itself. */
 export function buildMatchCheckCommand(
   target: MatchCheckTarget,
-  key: MatchKey,
+  check: MatchCheck,
   checkAt: ParisWallClock,
 ): CreateScheduleCommand {
   return new CreateScheduleCommand({
-    Name: buildScheduleName(key),
+    Name: buildScheduleName(check),
     GroupName: target.scheduleGroupName,
-    Description: `Check ${buildMatchId(key)}`,
+    Description: `Check ${buildMatchId(check)}, attempt ${String(check.attempt)}`,
     ScheduleExpression: `at(${formatParisWallClock(checkAt)})`,
     ScheduleExpressionTimezone: PARIS_TIME_ZONE,
     FlexibleTimeWindow: { Mode: FlexibleTimeWindowMode.OFF },
     ActionAfterCompletion: ActionAfterCompletion.DELETE,
-    Target: { Arn: target.functionArn, RoleArn: target.roleArn, Input: JSON.stringify(key) },
+    Target: { Arn: target.functionArn, RoleArn: target.roleArn, Input: JSON.stringify(check) },
   });
 }
 
@@ -56,16 +57,16 @@ export function buildMatchCheckCommand(
 export async function scheduleMatchCheck(
   sendCreateSchedule: SendCreateSchedule,
   target: MatchCheckTarget,
-  key: MatchKey,
+  check: MatchCheck,
   checkAt: ParisWallClock,
 ): Promise<ScheduleOutcome> {
   try {
-    await sendCreateSchedule(buildMatchCheckCommand(target, key, checkAt));
+    await sendCreateSchedule(buildMatchCheckCommand(target, check, checkAt));
     return 'created';
   } catch (error) {
     if (error instanceof ConflictException) {
       return 'already-scheduled';
     }
-    throw new Error(`check of ${buildMatchId(key)} not scheduled`, { cause: error });
+    throw new Error(`check ${String(check.attempt)} of ${buildMatchId(check)} not scheduled`, { cause: error });
   }
 }

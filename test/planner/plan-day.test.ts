@@ -30,14 +30,14 @@ function setUp(
 }
 
 describe('planDay', () => {
-  it('schedules a check 2 h after kick-off for each match of the Paris day', async () => {
+  it('schedules a first check 2 h after kick-off for each match of the Paris day', async () => {
     const { dependencies, lines } = setUp(Promise.resolve([AFTERNOON_MATCH]));
 
     await expect(planDay(dependencies)).resolves.toEqual({ date: '2026-11-01', matchCount: 1 });
 
     expect(dependencies.listDayMatches).toHaveBeenCalledWith('2026-11-01');
-    const [key, checkAt] = dependencies.scheduleMatchCheck.mock.calls[0] ?? [];
-    expect(key).toEqual(AFTERNOON_MATCH.key);
+    const [check, checkAt] = dependencies.scheduleMatchCheck.mock.calls[0] ?? [];
+    expect(check).toEqual({ ...AFTERNOON_MATCH.key, attempt: 1 });
     expect(checkAt && formatParisWallClock(checkAt)).toBe('2026-11-01T17:00:00');
     expect(lines).toEqual([
       {
@@ -110,7 +110,7 @@ describe('planDay', () => {
 
     await expect(planDay(dependencies)).rejects.toThrow('1 of 2 match checks not scheduled for 2026-11-01');
 
-    expect(dependencies.scheduleMatchCheck).toHaveBeenCalledExactlyOnceWith(UNTIMED_MATCH.key, expect.any(Date));
+    expect(dependencies.scheduleMatchCheck).toHaveBeenCalledExactlyOnceWith({ ...UNTIMED_MATCH.key, attempt: 1 }, expect.any(Date));
     expect(lines).toContainEqual(
       expect.objectContaining({
         level: 'ERROR',

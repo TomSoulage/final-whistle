@@ -40,6 +40,26 @@ const LOG_WRITE_STATEMENT = (constructId: string) => ({
   Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Logs::LogGroup', constructId), 'Arn'] },
 });
 
+/** Create schedules in the match check group only, and pass their role to Scheduler only. */
+const SCHEDULE_CHECK_STATEMENTS = () => [
+  {
+    Action: 'scheduler:CreateSchedule',
+    Effect: 'Allow',
+    Resource: {
+      'Fn::Join': [
+        '',
+        ['arn:', { Ref: 'AWS::Partition' }, ':scheduler:', { Ref: 'AWS::Region' }, ':', { Ref: 'AWS::AccountId' }, ':schedule/final-whistle-match-checks/*'],
+      ],
+    },
+  },
+  {
+    Action: 'iam:PassRole',
+    Condition: { StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' } },
+    Effect: 'Allow',
+    Resource: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+  },
+];
+
 const LAMBDA_TRUST = { Statement: [Match.objectLike({ Principal: { Service: 'lambda.amazonaws.com' } })] };
 
 /** Only schedules of this account may use a Scheduler role (confused deputy). */
@@ -80,18 +100,24 @@ describe('FinalWhistleStack', () => {
 });
 
 describe('fetch-results', () => {
-  it('runs on Node.js 24, arm64, 256 MB, with the bus name in its environment', () => {
+  it('runs on Node.js 24, arm64, 256 MB, with the bus and where to schedule its next attempt in its environment', () => {
     expect(getProperties('AWS::Lambda::Function', 'FetchResults')).toMatchObject({
       Runtime: 'nodejs24.x',
       Architectures: ['arm64'],
       Timeout: 30,
       MemorySize: 256,
-      Environment: { Variables: { EVENT_BUS_NAME: { Ref: getLogicalId('AWS::Events::EventBus') } } },
+      Environment: {
+        Variables: {
+          EVENT_BUS_NAME: { Ref: getLogicalId('AWS::Events::EventBus') },
+          MATCH_CHECK_SCHEDULE_GROUP: 'final-whistle-match-checks',
+          MATCH_CHECK_ROLE_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+        },
+      },
       LoggingConfig: { LogGroup: { Ref: getLogicalId('AWS::Logs::LogGroup', 'FetchResults') } },
     });
   });
 
-  it('may only write its logs and publish on its bus', () => {
+  it('may only write its logs, publish on its bus, and schedule its next attempt', () => {
     expectPolicyStatements('FetchResults', [
       LOG_WRITE_STATEMENT('FetchResults'),
       {
@@ -99,6 +125,7 @@ describe('fetch-results', () => {
         Effect: 'Allow',
         Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Events::EventBus'), 'Arn'] },
       },
+      ...SCHEDULE_CHECK_STATEMENTS(),
     ]);
   });
 });
@@ -207,25 +234,7 @@ describe('planner', () => {
   });
 
   it('may only write its logs, create schedules in the match check group, and pass their role to Scheduler', () => {
-    expectPolicyStatements('PlannerRoleDefaultPolicy', [
-      LOG_WRITE_STATEMENT('Planner'),
-      {
-        Action: 'scheduler:CreateSchedule',
-        Effect: 'Allow',
-        Resource: {
-          'Fn::Join': [
-            '',
-            ['arn:', { Ref: 'AWS::Partition' }, ':scheduler:', { Ref: 'AWS::Region' }, ':', { Ref: 'AWS::AccountId' }, ':schedule/final-whistle-match-checks/*'],
-          ],
-        },
-      },
-      {
-        Action: 'iam:PassRole',
-        Condition: { StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' } },
-        Effect: 'Allow',
-        Resource: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
-      },
-    ]);
+    expectPolicyStatements('PlannerRoleDefaultPolicy', [LOG_WRITE_STATEMENT('Planner'), ...SCHEDULE_CHECK_STATEMENTS()]);
   });
 
   it('runs every day at 10:00 Paris time, from a schedule outside the match check group', () => {

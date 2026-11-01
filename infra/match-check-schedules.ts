@@ -3,11 +3,7 @@ import { PolicyStatement, type Role } from 'aws-cdk-lib/aws-iam';
 import type { IFunction } from 'aws-cdk-lib/aws-lambda';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
 import { Construct } from 'constructs';
-import {
-  MATCH_CHECK_FUNCTION_VARIABLE,
-  MATCH_CHECK_GROUP_VARIABLE,
-  MATCH_CHECK_ROLE_VARIABLE,
-} from '../src/scheduling/environment.js';
+import { MATCH_CHECK_GROUP_VARIABLE, MATCH_CHECK_ROLE_VARIABLE } from '../src/scheduling/environment.js';
 import type { PipelineFunction } from './pipeline-function.js';
 import { createSchedulerInvokeRole, SCHEDULER_SERVICE } from './scheduler-invoke-role.js';
 
@@ -23,8 +19,8 @@ export interface MatchCheckSchedulesProps {
  * Lambdas allowed to schedule checks may only create schedules in this group, with this role.
  */
 export class MatchCheckSchedules extends Construct {
-  /** Where a check goes, for the environment of a Lambda that schedules checks. */
-  readonly environment: Readonly<Record<string, string>>;
+  /** The fetch-results function each match check invokes. */
+  readonly checkFunctionArn: string;
   private readonly invokeRole: Role;
 
   constructor(scope: Construct, id: string, props: MatchCheckSchedulesProps) {
@@ -38,16 +34,17 @@ export class MatchCheckSchedules extends Construct {
     this.invokeRole.addToPolicy(
       new PolicyStatement({ actions: ['lambda:InvokeFunction'], resources: [props.checkFunction.functionArn] }),
     );
-    this.environment = {
-      [MATCH_CHECK_GROUP_VARIABLE]: MATCH_CHECK_GROUP_NAME,
-      [MATCH_CHECK_FUNCTION_VARIABLE]: props.checkFunction.functionArn,
-      [MATCH_CHECK_ROLE_VARIABLE]: this.invokeRole.roleArn,
-    };
+    this.checkFunctionArn = props.checkFunction.functionArn;
   }
 
-  /** Allows creating schedules in the group only, and passing the invoke role to Scheduler only. */
-  grantScheduleChecks(pipelineFunction: PipelineFunction): void {
+  /**
+   * Lets a Lambda schedule match checks: the group and invoke role go into its environment, and it may
+   * only create schedules in that group and pass that role to Scheduler.
+   */
+  allowScheduleChecks(pipelineFunction: PipelineFunction): void {
     const { lambdaFunction } = pipelineFunction;
+    lambdaFunction.addEnvironment(MATCH_CHECK_GROUP_VARIABLE, MATCH_CHECK_GROUP_NAME);
+    lambdaFunction.addEnvironment(MATCH_CHECK_ROLE_VARIABLE, this.invokeRole.roleArn);
     lambdaFunction.addToRolePolicy(
       new PolicyStatement({ actions: ['scheduler:CreateSchedule'], resources: [this.getSchedulesInGroupArn()] }),
     );
@@ -61,7 +58,7 @@ export class MatchCheckSchedules extends Construct {
     Validations.of(pipelineFunction).acknowledge({
       id: `AwsSolutions::AwsSolutions-IAM5[Resource::arn:<AWS::Partition>:scheduler:<AWS::Region>:<AWS::AccountId>:schedule/${MATCH_CHECK_GROUP_NAME}/*]`,
       reason:
-        'Each match check gets its own schedule, named at run time from the match id, so the names cannot be ' +
+        'Each match check gets its own schedule, named at run time from the match id and attempt, so the names cannot be ' +
         'listed in advance; the wildcard is limited to the match check group and to CreateSchedule.',
     });
   }
