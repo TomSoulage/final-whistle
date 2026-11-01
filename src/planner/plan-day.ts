@@ -1,4 +1,5 @@
-import { buildMatchId, type DayMatch, type MatchKey } from '../results/match-result.js';
+import { buildMatchId, type DayMatch } from '../results/match-result.js';
+import { FIRST_ATTEMPT, type MatchCheck } from '../scheduling/match-check.js';
 import type { ScheduleOutcome } from '../scheduling/match-schedule.js';
 import {
   formatParisWallClock,
@@ -11,7 +12,7 @@ import { describeError, type LogFields, type Logger } from '../shared/logger.js'
 
 export interface PlanDayDependencies {
   readonly listDayMatches: (isoDate: string) => Promise<readonly DayMatch[]>;
-  readonly scheduleMatchCheck: (key: MatchKey, checkAt: ParisWallClock) => Promise<ScheduleOutcome>;
+  readonly scheduleMatchCheck: (check: MatchCheck, checkAt: ParisWallClock) => Promise<ScheduleOutcome>;
   readonly createLogger: (context: LogFields) => Logger;
   readonly now: () => Date;
 }
@@ -60,7 +61,7 @@ async function planMatch(match: DayMatch, now: Date, dependencies: PlanDayDepend
     if (match.kickOff === null) {
       logger.warn('kick-off time missing, fallback check time used', fields);
     }
-    const outcome = await dependencies.scheduleMatchCheck(match.key, checkAt);
+    const outcome = await dependencies.scheduleMatchCheck({ ...match.key, attempt: FIRST_ATTEMPT }, checkAt);
     logger.info('match check scheduled', { ...fields, outcome });
     return true;
   } catch (error) {
