@@ -31,6 +31,42 @@ jobs:
       - run: npm ci
       - run: npm run ${{ matrix.check }}
 
+  diff:
+    # GitHub gives no OIDC token to fork and Dependabot pull requests: skip the job there.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/final-whistle-github-pull-request
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Write the AWS changes to the job summary
+        run: |
+          status=0
+          npm run --silent diff > cdk-diff.txt 2>&1 || status=$?
+          cat cdk-diff.txt
+          {
+            echo '## AWS changes (`cdk diff`)'
+            echo '```'
+            cat cdk-diff.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
   commitlint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
