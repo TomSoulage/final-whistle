@@ -5,8 +5,9 @@ import type { MatchCheckTarget } from './match-schedule.js';
 export const MATCH_CHECK_GROUP_VARIABLE = 'MATCH_CHECK_SCHEDULE_GROUP';
 export const MATCH_CHECK_FUNCTION_VARIABLE = 'MATCH_CHECK_FUNCTION_ARN';
 export const MATCH_CHECK_ROLE_VARIABLE = 'MATCH_CHECK_ROLE_ARN';
+export const MATCH_CHECK_DEAD_LETTER_QUEUE_VARIABLE = 'MATCH_CHECK_DEAD_LETTER_QUEUE_ARN';
 
-/** The schedule group and invoke role of match checks; the function to invoke is given by each Lambda. */
+/** The schedule group, invoke role and dead-letter queue of match checks; the function to invoke is given by each Lambda. */
 export type MatchCheckDestination = Omit<MatchCheckTarget, 'functionArn'>;
 
 /** Read at cold start: a missing variable fails with its name. */
@@ -14,5 +15,6 @@ export function readMatchCheckDestination(): MatchCheckDestination {
   return {
     scheduleGroupName: getRequiredEnv(MATCH_CHECK_GROUP_VARIABLE),
     roleArn: getRequiredEnv(MATCH_CHECK_ROLE_VARIABLE),
+    deadLetterQueueArn: getRequiredEnv(MATCH_CHECK_DEAD_LETTER_QUEUE_VARIABLE),
   };
 }

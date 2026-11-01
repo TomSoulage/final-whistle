@@ -29,8 +29,8 @@ The bot token and the chat id live in SSM Parameter Store and are read once per 
 
 - **At-least-once delivery**: send, then record. If `notify` crashes between the two steps, the score goes out twice rather than never.
 - **Idempotence**: the DynamoDB check absorbs the duplicates caused by retries.
-- **Dead-letter queue**: an event that still fails after Lambda's retries lands in an SQS queue instead of disappearing.
-- **Alerting**: CloudWatch alarms (a message in the DLQ, no result on a match day) notify me on Telegram through SNS.
+- **Dead-letter queue**: an event that still fails after Lambda's retries, or that a schedule or the bus cannot deliver, lands in an SQS queue instead of disappearing.
+- **Alerting**: CloudWatch alarms (a message in the DLQ, a match never found on the page, a planner that stopped running) email me through SNS, a channel that keeps working when Telegram does not.
 - **Traceability**: structured JSON logs carrying the match id, so one match can be followed across all Lambdas.
 - **Least privilege**: one IAM role per Lambda, limited to what it actually uses.
 
@@ -53,13 +53,14 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 
 ## Status
 
-Work in progress: the diagram shows the target architecture, built one step at a time.
+Work in progress: the diagram shows the target architecture, built one step at a time; its dashed grey boxes are not built yet.
 
 - Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles, a `cdk diff` of each pull request and a `cdk deploy` on each merge to `main`.
 - Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished.
 - Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it.
 - Done: the `planner` Lambda, run every day at 10:00 (Paris time): it schedules one `fetch-results` check per match, about 2 hours after kick-off and never at night. When the score is not published yet, `fetch-results` checks again later, with growing delays, up to 7 checks.
-- Next: the DLQ, the alarms, the smoke test and the `prod` alias rollback.
+- Done: the dead-letter queue, fed by every Lambda and every schedule or rule that invokes one, and three CloudWatch alarms that email me through SNS.
+- Next: the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 

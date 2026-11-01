@@ -12,6 +12,7 @@ const TARGET = {
   scheduleGroupName: 'final-whistle-match-checks',
   functionArn: 'arn:aws:lambda:eu-west-3:123456789012:function:fetch-results',
   roleArn: 'arn:aws:iam::123456789012:role/match-checks',
+  deadLetterQueueArn: 'arn:aws:sqs:eu-west-3:123456789012:failures',
 };
 const CHECK_AT = parseParisWallClock('2026-11-01', '17:00');
 
@@ -33,7 +34,7 @@ describe('buildScheduleName', () => {
 });
 
 describe('buildMatchCheckCommand', () => {
-  it('invokes fetch-results once with the match check, in Paris time, then deletes itself', () => {
+  it('invokes fetch-results once with the match check, in Paris time, then deletes itself; an invocation it cannot make goes to the dead-letter queue', () => {
     expect(buildMatchCheckCommand(TARGET, CHECK, CHECK_AT).input).toEqual({
       Name: buildScheduleName(CHECK),
       GroupName: TARGET.scheduleGroupName,
@@ -42,7 +43,12 @@ describe('buildMatchCheckCommand', () => {
       ScheduleExpressionTimezone: 'Europe/Paris',
       FlexibleTimeWindow: { Mode: 'OFF' },
       ActionAfterCompletion: 'DELETE',
-      Target: { Arn: TARGET.functionArn, RoleArn: TARGET.roleArn, Input: JSON.stringify(CHECK) },
+      Target: {
+        Arn: TARGET.functionArn,
+        RoleArn: TARGET.roleArn,
+        Input: JSON.stringify(CHECK),
+        DeadLetterConfig: { Arn: TARGET.deadLetterQueueArn },
+      },
     });
   });
 });

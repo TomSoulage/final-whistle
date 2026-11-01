@@ -4,6 +4,7 @@ import type { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { type EventBus, Rule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import type { IQueue } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 import { MATCH_FINISHED_DETAIL_TYPE, MATCH_FINISHED_SOURCE } from '../src/events/match-finished.js';
 import {
@@ -28,6 +29,7 @@ export const TELEGRAM_PARAMETER_NAMES = {
 export interface NotifyFunctionProps {
   readonly eventBus: EventBus;
   readonly sentMatches: Table;
+  readonly failureQueue: IQueue;
 }
 
 /** The notify Lambda, subscribed to MatchFinished by its own rule (D6), with access to its table and parameters only. */
@@ -43,13 +45,15 @@ export class NotifyFunction extends PipelineFunction {
         [BOT_TOKEN_PARAMETER_VARIABLE]: TELEGRAM_PARAMETER_NAMES.botToken,
         [CHAT_ID_PARAMETER_VARIABLE]: TELEGRAM_PARAMETER_NAMES.chatId,
       },
+      failureQueue: props.failureQueue,
     });
     this.allowSentMatchesAccess(props.sentMatches);
     this.allowTelegramParametersRead();
     new Rule(this, 'MatchFinishedRule', {
       eventBus: props.eventBus,
       eventPattern: { source: [MATCH_FINISHED_SOURCE], detailType: [MATCH_FINISHED_DETAIL_TYPE] },
-      targets: [new LambdaFunction(this.lambdaFunction)],
+      // An event the rule cannot deliver to notify goes to the failure queue (D37).
+      targets: [new LambdaFunction(this.lambdaFunction, { deadLetterQueue: props.failureQueue })],
     });
   }
 
