@@ -15,6 +15,13 @@ export interface MatchResult extends MatchKey, FinalScore {
   readonly competition: string;
 }
 
+/** A match listed for the day, before its result is known: every source adapter returns this shape (D2). */
+export interface DayMatch {
+  readonly key: MatchKey;
+  /** Kick-off time in French local time, `HH:MM`, or null when the source does not give one yet. */
+  readonly kickOff: string | null;
+}
+
 /** What a source knows about a match when it is asked for its result. */
 export type MatchLookup =
   | { readonly status: 'finished'; readonly result: MatchResult }

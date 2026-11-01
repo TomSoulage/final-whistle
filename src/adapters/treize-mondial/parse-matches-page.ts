@@ -1,6 +1,7 @@
 import { parse, type HTMLElement } from 'node-html-parser';
 import type { FinalScore } from '../../results/match-result.js';
 import {
+  formatPageDay,
   getCellText,
   isFinishedMark,
   parseKickOff,
@@ -53,10 +54,6 @@ function findPageDay(rows: readonly Row[]): PageDay {
 
 function getRowPageDay(cells: Row): PageDay | null {
   return cells.map((cell) => parsePageDay(getCellText(cell))).find((day) => day !== null) ?? null;
-}
-
-function formatPageDay(day: PageDay): string {
-  return `${String(day.day)}/${String(day.month)}`;
 }
 
 function getRowCompetition(cells: Row): string | null {

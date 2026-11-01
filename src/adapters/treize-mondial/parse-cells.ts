@@ -32,6 +32,11 @@ export function parsePageDay(text: string): PageDay | null {
   return { day: Number(groups.day), month: Number(groups.month) };
 }
 
+/** `{ day: 31, month: 10 }` → `31/10`, as in error messages. */
+export function formatPageDay(day: PageDay): string {
+  return `${String(day.day)}/${String(day.month)}`;
+}
+
 /** `5H40` → `05:40`; anything else (postponed, not set yet) → null. */
 export function parseKickOff(text: string): string | null {
   const groups = KICK_OFF_PATTERN.exec(text)?.groups;
