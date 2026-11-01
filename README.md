@@ -56,7 +56,8 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 Work in progress: the diagram shows the target architecture, built one step at a time.
 
 - Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles, a `cdk diff` of each pull request and a `cdk deploy` on each merge to `main`.
-- Next: the Lambdas, with the smoke test and the `prod` alias rollback.
+- Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished. Nothing invokes it or consumes its events yet.
+- Next: `notify`, the planner and its one-time schedules, then the DLQ, the alarms, the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 

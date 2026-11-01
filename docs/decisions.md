@@ -26,6 +26,7 @@ Log of the project's structural choices. Each decision has a stable identifier (
 - **D7. At-least-once delivery: send, then record.** `notify` checks DynamoDB, sends to Telegram, then records the score. A crash between sending and recording means a duplicate message, never a lost score. A rare duplicate is accepted.
 - **D8. Idempotence key**: the page date and both teams, e.g. `2026-10-30|Angleterre|Papouasie-Nouvelle-Guinée`. Team names are kept exactly as published.
 - **D9. Failed events go to a DLQ.** After Lambda's retries, a failing event lands in an SQS dead-letter queue, watched by an alarm, instead of being lost silently.
+- **D28. The `MatchFinished` contract.** `fetch-results` takes the match key `{ date, homeTeam, awayTeam }` (D8) as input and validates it first: a malformed key fails at once instead of being looked up and rescheduled. A finished match is published on the `final-whistle` bus as `MatchFinished` (source `final-whistle.fetch-results`); its detail is the normalised result plus its match id, so consumers never rebuild the key. The bus is created with its producer and each consumer adds its own rule (D6). Source, type and detail are defined once in `src/events`, for the producer and the rules. PutEvents reports a rejected entry without throwing, so a rejection is turned into an error: the invocation fails and is retried instead of losing the score.
 
 ### Data and secrets
 
@@ -55,6 +56,7 @@ Log of the project's structural choices. Each decision has a stable identifier (
 
 - **D20. Toolchain: npm, TypeScript 6.0, ESLint, Vitest, commitlint, tsx.** tsx runs the CDK app, as `cdk init` sets it up. Node 24 (`.nvmrc`). TypeScript stays on 6.0 because typescript-eslint does not support 7.x yet. ESLint enforces the measurable code rules of `CLAUDE.md`. Commitlint checks the PR title, since it becomes the squash commit, as well as each commit. Actions are restricted to GitHub-owned ones plus an explicit allowlist in the repository settings (currently `gitleaks/gitleaks-action` and `aws-actions/configure-aws-credentials`), and must be pinned to a full commit SHA; Dependabot keeps them up to date. A new third-party action needs an allowlist entry first.
 - **D21. Dependabot sorts updates by risk.** Minor and patch updates are grouped into one weekly pull request, which should stay green. Each major update gets its own pull request, so a breaking one never blocks the safe ones. New versions are proposed only after a 7-day cooldown, to avoid compromised releases that get pulled within days. Two majors are ignored because their version is a decision, not a default: `typescript` (revisit when typescript-eslint supports 7.x) and `@types/node` (revisit when the Lambda Node.js runtime changes).
+- **D29. Structured logs without a library.** An in-house JSON logger (one object per line on stdout) rather than Powertools: a few lines, no dependency. The context (Lambda name, match id) is on every line and cannot be overwritten by a field. A failure is logged with its chain of causes, then rethrown so that Lambda retries it. Each Lambda has its own log group, created by the stack with a one-month retention.
 
 ---
 
