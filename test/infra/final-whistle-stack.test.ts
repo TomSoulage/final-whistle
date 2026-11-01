@@ -23,11 +23,12 @@ describe('FinalWhistleStack', () => {
     template.hasResourceProperties('AWS::Events::EventBus', { Name: EVENT_BUS_NAME });
   });
 
-  it('runs fetch-results on Node.js 24, arm64, with the bus name in its environment', () => {
+  it('runs fetch-results on Node.js 24, arm64, 256 MB, with the bus name in its environment', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs24.x',
       Architectures: ['arm64'],
       Timeout: 30,
+      MemorySize: 256,
       Environment: { Variables: { EVENT_BUS_NAME: { Ref: getLogicalId('AWS::Events::EventBus') } } },
       LoggingConfig: { LogGroup: { Ref: getLogicalId('AWS::Logs::LogGroup') } },
     });

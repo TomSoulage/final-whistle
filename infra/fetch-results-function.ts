@@ -11,6 +11,9 @@ import { EVENT_BUS_NAME_VARIABLE } from '../src/fetch-results/environment.js';
 const HANDLER_ENTRY = fileURLToPath(new URL('../src/fetch-results/handler.ts', import.meta.url));
 // Up to two pages at 10 s each, plus parsing and publishing.
 const TIMEOUT_SECONDS = 30;
+// The default 128 MB peaked at 120 MB on a real run (Node runtime, SDK, two pages). Parsing itself
+// holds a few MB even for a page ten times larger, so 256 MB leaves a wide margin, and more CPU.
+const MEMORY_SIZE_MB = 256;
 export const LOG_RETENTION = RetentionDays.ONE_MONTH;
 
 export interface FetchResultsFunctionProps {
@@ -40,6 +43,7 @@ export class FetchResultsFunction extends Construct {
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(TIMEOUT_SECONDS),
+      memorySize: MEMORY_SIZE_MB,
       role,
       logGroup,
       environment: { [EVENT_BUS_NAME_VARIABLE]: props.eventBus.eventBusName },
