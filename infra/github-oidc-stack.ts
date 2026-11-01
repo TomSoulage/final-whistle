@@ -10,7 +10,9 @@ const GITHUB_REPOSITORY = 'TomSoulage@76871522/final-whistle@1440617490';
 const CDK_BOOTSTRAP_QUALIFIER = 'hnb659fds';
 
 export const PULL_REQUEST_SUBJECT = `repo:${GITHUB_REPOSITORY}:pull_request`;
-export const MAIN_BRANCH_SUBJECT = `repo:${GITHUB_REPOSITORY}:ref:refs/heads/main`;
+// A job bound to a GitHub environment gets this subject instead of its branch: the environment's
+// branch policy (main only) is what keeps other branches out.
+export const PRODUCTION_ENVIRONMENT_SUBJECT = `repo:${GITHUB_REPOSITORY}:environment:production`;
 export const PULL_REQUEST_ROLE_NAME = 'final-whistle-github-pull-request';
 export const DEPLOY_ROLE_NAME = 'final-whistle-github-deploy';
 
@@ -30,8 +32,8 @@ function getCdkBootstrapRoleArn(stack: Stack, roleKind: CdkBootstrapRoleKind): s
 
 /**
  * GitHub OIDC trust for this repository: the provider, a read-only role for pull requests
- * (`cdk diff`) and a deploy role usable from `main` only. Deployed once by hand: CI cannot
- * create the role it signs in with.
+ * (`cdk diff`) and a deploy role usable from the `production` environment only. Deployed by
+ * hand: CI cannot create the role it signs in with.
  */
 export class GithubOidcStack extends Stack {
   private readonly provider: OidcProviderNative;
@@ -50,9 +52,9 @@ export class GithubOidcStack extends Stack {
     });
     this.createGithubRole('DeployRole', {
       roleName: DEPLOY_ROLE_NAME,
-      subject: MAIN_BRANCH_SUBJECT,
+      subject: PRODUCTION_ENVIRONMENT_SUBJECT,
       bootstrapRoles: ['lookup', 'deploy', 'file-publishing'],
-      description: 'GitHub Actions on main: cdk deploy',
+      description: 'GitHub Actions in the production environment: cdk deploy',
     });
   }
 

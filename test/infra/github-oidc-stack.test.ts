@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   DEPLOY_ROLE_NAME,
   GithubOidcStack,
-  MAIN_BRANCH_SUBJECT,
+  PRODUCTION_ENVIRONMENT_SUBJECT,
   PULL_REQUEST_ROLE_NAME,
   PULL_REQUEST_SUBJECT,
 } from '../../infra/github-oidc-stack.js';
@@ -77,9 +77,11 @@ describe('GithubOidcStack', () => {
     expectTrustedSubject(PULL_REQUEST_ROLE_NAME, PULL_REQUEST_SUBJECT);
   });
 
-  it('lets only the main branch of this repository assume the deploy role', () => {
-    expect(MAIN_BRANCH_SUBJECT).toBe('repo:TomSoulage@76871522/final-whistle@1440617490:ref:refs/heads/main');
-    expectTrustedSubject(DEPLOY_ROLE_NAME, MAIN_BRANCH_SUBJECT);
+  it('lets only the production environment of this repository assume the deploy role', () => {
+    expect(PRODUCTION_ENVIRONMENT_SUBJECT).toBe(
+      'repo:TomSoulage@76871522/final-whistle@1440617490:environment:production',
+    );
+    expectTrustedSubject(DEPLOY_ROLE_NAME, PRODUCTION_ENVIRONMENT_SUBJECT);
   });
 
   it('limits the pull request role to the read-only CDK lookup role', () => {
