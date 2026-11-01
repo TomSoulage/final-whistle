@@ -37,6 +37,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1156.0",
     "@aws-sdk/client-eventbridge": "3.1156.0",
+    "@aws-sdk/client-scheduler": "3.1156.0",
     "@aws-sdk/client-ssm": "3.1156.0",
     "node-html-parser": "9.0.5"
   }
