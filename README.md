@@ -40,7 +40,7 @@ Every change goes through a pull request; `main` is protected and deploys itself
 
 - **CI on each pull request**: lint, types, unit tests, `cdk synth` with [cdk-nag](https://github.com/cdklabs/cdk-nag) security rules, `cdk diff` in the job summary, commitlint, CodeQL and Gitleaks.
 - **Merge gate**: all required checks green, squash merge only, no direct push to `main`.
-- **CD on merge**: GitHub Actions assumes an AWS role through OIDC (no AWS keys stored), runs `cdk deploy`, then a smoke test on the new Lambda versions. The `prod` alias moves to the new version only if the test passes; otherwise it stays on the previous one and I get an alert.
+- **CD on merge**: each merge deploys to the GitHub `production` environment, which only `main` can use. GitHub Actions assumes an AWS role through OIDC (no AWS keys stored), runs `cdk deploy`, then a smoke test on the new Lambda versions. The `prod` alias moves to the new version only if the test passes; otherwise it stays on the previous one and I get an alert.
 - **Always on**: secret scanning with push protection, Dependabot alerts and updates.
 
 ## Cost
@@ -55,8 +55,8 @@ TypeScript · AWS Lambda (Node.js, arm64) · EventBridge (Scheduler and event bu
 
 Work in progress: the diagram shows the target architecture, built one step at a time.
 
-- Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles and a `cdk diff` of each pull request.
-- Next: deployment on merge, then the Lambdas.
+- Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles, a `cdk diff` of each pull request and a `cdk deploy` on each merge to `main`.
+- Next: the Lambdas, with the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 
