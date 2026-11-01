@@ -1,6 +1,7 @@
 import { Stack, type StackProps } from 'aws-cdk-lib';
 import { EventBus } from 'aws-cdk-lib/aws-events';
 import type { Construct } from 'constructs';
+import { FailureAlarms } from './failure-alarms.js';
 import { createFailureQueue } from './failure-queue.js';
 import { FetchResultsFunction } from './fetch-results-function.js';
 import { MatchCheckSchedules } from './match-check-schedules.js';
@@ -24,7 +25,12 @@ export class FinalWhistleStack extends Stack {
     });
     // A check that finds no score schedules the next attempt itself (D35).
     matchChecks.allowScheduleChecks(fetchResults);
-    new PlannerFunction(this, 'Planner', { matchChecks, failureQueue });
+    const planner = new PlannerFunction(this, 'Planner', { matchChecks, failureQueue });
     new NotifyFunction(this, 'Notify', { eventBus, sentMatches: createSentMatchesTable(this), failureQueue });
+    new FailureAlarms(this, 'Alarms', {
+      failureQueue,
+      matchCheckLogGroup: fetchResults.logGroup,
+      planner: planner.lambdaFunction,
+    });
   }
 }

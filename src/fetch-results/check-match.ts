@@ -6,6 +6,8 @@ import { planRetry } from '../scheduling/plan-check-time.js';
 import { describeError, type LogFields, type Logger } from '../shared/logger.js';
 
 const INPUT_NAME = 'fetch-results input';
+/** Logged once the attempts are used up; the match-not-found alarm counts it (D39). */
+export const MATCH_GIVEN_UP_MESSAGE = 'match given up';
 
 export interface CheckMatchDependencies {
   readonly getMatchResult: (key: MatchKey) => Promise<MatchLookup>;
@@ -51,7 +53,7 @@ async function reportLookup(check: MatchCheck, logger: Logger, dependencies: Che
   }
   const retry = await scheduleRetry(check, dependencies);
   if (retry === null) {
-    logger.warn('match given up', { attempt: check.attempt, status: lookup.status });
+    logger.warn(MATCH_GIVEN_UP_MESSAGE, { attempt: check.attempt, status: lookup.status });
   } else if (lookup.status === 'not-finished') {
     logger.info('match not finished yet', { attempt: check.attempt, ...retry });
   } else {

@@ -324,3 +324,80 @@ describe('planner', () => {
     ]);
   });
 });
+
+describe('alarms', () => {
+  const ALERT_ACTIONS = () => [{ Ref: getLogicalId('AWS::SNS::Topic') }];
+
+  it('notify a named, HTTPS-only topic that CloudWatch alarms of this account may publish on', () => {
+    template.resourceCountIs('AWS::SNS::Topic', 1);
+    template.hasResourceProperties('AWS::SNS::Topic', { TopicName: 'final-whistle-alerts' });
+    template.resourceCountIs('AWS::SNS::Subscription', 0);
+    template.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: {
+        Statement: [
+          Match.objectLike({ Effect: 'Deny', Condition: { Bool: { 'aws:SecureTransport': 'false' } } }),
+          Match.objectLike({
+            Action: 'sns:Publish',
+            Effect: 'Allow',
+            Principal: { Service: 'cloudwatch.amazonaws.com' },
+            Condition: { StringEquals: { 'aws:SourceAccount': { Ref: 'AWS::AccountId' } } },
+          }),
+        ],
+      },
+    });
+  });
+
+  it('are three, each notifying the topic only when it goes to ALARM', () => {
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 3);
+    template.allResourcesProperties('AWS::CloudWatch::Alarm', {
+      AlarmActions: ALERT_ACTIONS(),
+      OKActions: Match.absent(),
+      Threshold: 1,
+    });
+  });
+
+  it('fire on each message sent to the failure queue, even while an earlier one is still waiting', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'final-whistle-failure-queue-message-sent',
+      Namespace: 'AWS/SQS',
+      MetricName: 'NumberOfMessagesSent',
+      Dimensions: [{ Name: 'QueueName', Value: { 'Fn::GetAtt': [getLogicalId('AWS::SQS::Queue'), 'QueueName'] } }],
+      Statistic: 'Sum',
+      Period: 300,
+      EvaluationPeriods: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+    });
+  });
+
+  it('count in the fetch-results logs only the matches given up as not found, not the postponed ones', () => {
+    template.resourceCountIs('AWS::Logs::MetricFilter', 1);
+    template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      LogGroupName: { Ref: getLogicalId('AWS::Logs::LogGroup', 'FetchResults') },
+      FilterPattern: '{ ($.message = "match given up") && ($.status = "not-found") }',
+      MetricTransformations: [{ MetricNamespace: 'FinalWhistle', MetricName: 'MatchGivenUpNotFound', MetricValue: '1' }],
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'final-whistle-match-not-found',
+      Namespace: 'FinalWhistle',
+      MetricName: 'MatchGivenUpNotFound',
+      Statistic: 'Sum',
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+    });
+  });
+
+  it('fire when the planner has had no invocation for 26 hours, an hour without data counting as none', () => {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'final-whistle-planner-not-run',
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Invocations',
+      Dimensions: [{ Name: 'FunctionName', Value: { Ref: getLogicalId('AWS::Lambda::Function', 'Planner') } }],
+      Statistic: 'Sum',
+      Period: 3600,
+      EvaluationPeriods: 26,
+      ComparisonOperator: 'LessThanThreshold',
+      TreatMissingData: 'breaching',
+    });
+  });
+});
