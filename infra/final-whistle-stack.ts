@@ -17,6 +17,8 @@ export class FinalWhistleStack extends Stack {
     const eventBus = new EventBus(this, 'EventBus', { eventBusName: EVENT_BUS_NAME });
     const fetchResults = new FetchResultsFunction(this, 'FetchResults', { eventBus });
     const matchChecks = new MatchCheckSchedules(this, 'MatchChecks', { checkFunction: fetchResults.lambdaFunction });
+    // A check that finds no score schedules the next attempt itself (D35).
+    matchChecks.allowScheduleChecks(fetchResults);
     new PlannerFunction(this, 'Planner', { matchChecks });
     new NotifyFunction(this, 'Notify', { eventBus, sentMatches: createSentMatchesTable(this) });
   }

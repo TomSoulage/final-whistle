@@ -4,6 +4,7 @@ import type { CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { Schedule, ScheduleExpression } from 'aws-cdk-lib/aws-scheduler';
 import { LambdaInvoke } from 'aws-cdk-lib/aws-scheduler-targets';
 import type { Construct } from 'constructs';
+import { MATCH_CHECK_FUNCTION_VARIABLE } from '../src/scheduling/environment.js';
 import type { MatchCheckSchedules } from './match-check-schedules.js';
 import { PipelineFunction } from './pipeline-function.js';
 import { createSchedulerInvokeRole } from './scheduler-invoke-role.js';
@@ -28,9 +29,9 @@ export class PlannerFunction extends PipelineFunction {
       roleDescription: 'planner Lambda: write its logs and schedule match checks',
       timeoutSeconds: TIMEOUT_SECONDS,
       memorySizeMb: MEMORY_SIZE_MB,
-      environment: props.matchChecks.environment,
+      environment: { [MATCH_CHECK_FUNCTION_VARIABLE]: props.matchChecks.checkFunctionArn },
     });
-    props.matchChecks.grantScheduleChecks(this);
+    props.matchChecks.allowScheduleChecks(this);
     this.addMorningSchedule();
   }
 
