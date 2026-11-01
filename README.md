@@ -16,7 +16,7 @@ It is also a side project to practise serverless and event-driven design on a re
 ## How it works
 
 1. **Every morning**, a schedule runs the `planner` Lambda. It reads the day's kick-off times on [Treize Mondial](https://treizemondial.fr/matchs-du-jour-rugby-a-xiii/).
-2. For each match, the planner creates a **one-time schedule** about 2 hours after kick-off. No match, nothing is scheduled.
+2. For each match, the planner creates a **one-time schedule** about 2 hours after kick-off, never at night (23:00 to 08:00). No match, nothing is scheduled.
 3. When a schedule fires, `fetch-results` reads the result through a **source adapter** and publishes a `MatchFinished` event on an EventBridge bus. If the score is not published yet, it reschedules itself one hour later.
 4. `notify` is subscribed to `MatchFinished`. For each event it:
    1. **checks** in DynamoDB that the score was not already sent,
@@ -57,8 +57,9 @@ Work in progress: the diagram shows the target architecture, built one step at a
 
 - Done: TypeScript project, required pull request checks (lint, types, unit tests, commitlint, Gitleaks, CodeQL), Dependabot updates, an empty CDK app synthesized on each pull request with cdk-nag rules, GitHub OIDC roles, a `cdk diff` of each pull request and a `cdk deploy` on each merge to `main`.
 - Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished.
-- Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it. Nothing invokes `fetch-results` yet.
-- Next: the planner and its one-time schedules, then the DLQ, the alarms, the smoke test and the `prod` alias rollback.
+- Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it.
+- Done: the `planner` Lambda, run every day at 10:00 (Paris time): it schedules one `fetch-results` check per match, about 2 hours after kick-off and never at night. A score not published yet at that check is not looked up again.
+- Next: rescheduling a check when the score is late, then the DLQ, the alarms, the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
 
