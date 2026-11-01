@@ -2,7 +2,9 @@ import { Stack, type StackProps } from 'aws-cdk-lib';
 import { EventBus } from 'aws-cdk-lib/aws-events';
 import type { Construct } from 'constructs';
 import { FetchResultsFunction } from './fetch-results-function.js';
+import { MatchCheckSchedules } from './match-check-schedules.js';
 import { NotifyFunction } from './notify-function.js';
+import { PlannerFunction } from './planner-function.js';
 import { createSentMatchesTable } from './sent-matches-table.js';
 
 export const EVENT_BUS_NAME = 'final-whistle';
@@ -13,7 +15,9 @@ export class FinalWhistleStack extends Stack {
     super(scope, id, props);
     // Created with its producer; consumers subscribe with their own rules (D6).
     const eventBus = new EventBus(this, 'EventBus', { eventBusName: EVENT_BUS_NAME });
-    new FetchResultsFunction(this, 'FetchResults', { eventBus });
+    const fetchResults = new FetchResultsFunction(this, 'FetchResults', { eventBus });
+    const matchChecks = new MatchCheckSchedules(this, 'MatchChecks', { checkFunction: fetchResults.lambdaFunction });
+    new PlannerFunction(this, 'Planner', { matchChecks });
     new NotifyFunction(this, 'Notify', { eventBus, sentMatches: createSentMatchesTable(this) });
   }
 }

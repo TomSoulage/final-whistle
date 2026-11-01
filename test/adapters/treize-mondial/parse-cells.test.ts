@@ -1,6 +1,7 @@
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
 import {
+  formatPageDay,
   getCellText,
   isFinishedMark,
   parseKickOff,
@@ -26,6 +27,12 @@ describe('parsePageDay', () => {
 
   it.each(['🏉 RUGBY À XIII', '', '31/10'])('ignores %j', (text) => {
     expect(parsePageDay(text)).toBeNull();
+  });
+});
+
+describe('formatPageDay', () => {
+  it('writes the day and month as on the page', () => {
+    expect(formatPageDay({ day: 1, month: 11 })).toBe('1/11');
   });
 });
 

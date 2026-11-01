@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchMatchesPage } from '../../../src/adapters/treize-mondial/fetch-matches-page.js';
 import {
   getMatchResult,
+  listDayMatches,
   PREVIOUS_DAY_PAGE_URL,
   TODAY_PAGE_URL,
 } from '../../../src/adapters/treize-mondial/treize-mondial-adapter.js';
@@ -14,14 +15,12 @@ const PAGES_BY_URL = new Map([
   [PREVIOUS_DAY_PAGE_URL, readFixture('2026-10-31-all-finished.html')],
 ]);
 
-describe('getMatchResult', () => {
-  beforeEach(() => {
-    vi.mocked(fetchMatchesPage).mockReset();
-    vi.mocked(fetchMatchesPage).mockImplementation((url) =>
-      Promise.resolve(PAGES_BY_URL.get(url) ?? ''),
-    );
-  });
+beforeEach(() => {
+  vi.mocked(fetchMatchesPage).mockReset();
+  vi.mocked(fetchMatchesPage).mockImplementation((url) => Promise.resolve(PAGES_BY_URL.get(url) ?? ''));
+});
 
+describe('getMatchResult', () => {
   it('reads a finished match of the day from the main page only', async () => {
     const lookup = await getMatchResult({
       date: '2026-11-01',
@@ -80,5 +79,30 @@ describe('getMatchResult', () => {
     await expect(
       getMatchResult({ date: '2026-11-01', homeTeam: 'Liban', awayTeam: 'France' }),
     ).rejects.toThrow('HTTP 503');
+  });
+});
+
+describe('listDayMatches', () => {
+  it('lists every match of the main page with its key and kick-off time', async () => {
+    const matches = await listDayMatches('2026-11-01');
+
+    expect(matches).toHaveLength(16);
+    expect(matches).toContainEqual({
+      key: { date: '2026-11-01', homeTeam: 'Australie (F)', awayTeam: 'Pays de Galles (F)' },
+      kickOff: '05:40',
+    });
+    expect(fetchMatchesPage).toHaveBeenCalledExactlyOnceWith(TODAY_PAGE_URL);
+  });
+
+  it('fails when the main page shows another day', async () => {
+    await expect(listDayMatches('2026-11-02')).rejects.toThrow(
+      `Treize Mondial page ${TODAY_PAGE_URL} shows 1/11, not 2026-11-02`,
+    );
+  });
+
+  it('fails with the URL of a page that cannot be parsed', async () => {
+    vi.mocked(fetchMatchesPage).mockResolvedValue('<p>Maintenance</p>');
+
+    await expect(listDayMatches('2026-11-01')).rejects.toThrow(`Treize Mondial page ${TODAY_PAGE_URL}: day header`);
   });
 });

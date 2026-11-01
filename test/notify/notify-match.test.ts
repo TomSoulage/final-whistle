@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { notifyMatch, type NotifyMatchDependencies } from '../../src/notify/notify-match.js';
 import type { RememberOutcome } from '../../src/notify/sent-matches.js';
-import { createLogger } from '../../src/shared/logger.js';
+import { captureLogs } from '../capture-logs.js';
 
 const MATCH_ID = '2026-11-01|Carcassonne|Lézignan';
 const DETAIL = {
@@ -25,7 +25,7 @@ interface Outcomes {
 /** Records every call in order, so the check → send → remember sequence can be asserted. */
 function setUp(outcomes: Outcomes = {}) {
   const calls: unknown[][] = [];
-  const lines: Record<string, unknown>[] = [];
+  const { lines, createLogger } = captureLogs();
   const dependencies: NotifyMatchDependencies = {
     isAlreadySent: (matchId) => {
       calls.push(['isAlreadySent', matchId]);
@@ -39,7 +39,7 @@ function setUp(outcomes: Outcomes = {}) {
       calls.push(['rememberSent', matchId]);
       return outcomes.rememberSent ?? Promise.resolve('recorded');
     },
-    createLogger: (context) => createLogger(context, (line) => lines.push(JSON.parse(line) as Record<string, unknown>)),
+    createLogger,
   };
   return { dependencies, calls, lines };
 }

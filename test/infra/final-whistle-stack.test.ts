@@ -5,9 +5,12 @@ import { EVENT_BUS_NAME, FinalWhistleStack } from '../../infra/final-whistle-sta
 
 let template: Template;
 
+/** Synthesizing the stack bundles every Lambda, which can exceed the default 10 s under load. */
+const SYNTH_TIMEOUT_MS = 30_000;
+
 beforeAll(() => {
   template = Template.fromStack(new FinalWhistleStack(new App(), 'TestFinalWhistle'));
-});
+}, SYNTH_TIMEOUT_MS);
 
 /** The logical id of the only resource of this type under a construct, e.g. `Notify`. */
 function getLogicalId(type: string, constructId = ''): string {
@@ -37,6 +40,20 @@ const LOG_WRITE_STATEMENT = (constructId: string) => ({
   Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Logs::LogGroup', constructId), 'Arn'] },
 });
 
+const LAMBDA_TRUST = { Statement: [Match.objectLike({ Principal: { Service: 'lambda.amazonaws.com' } })] };
+
+/** Only schedules of this account may use a Scheduler role (confused deputy). */
+const SCHEDULER_TRUST = {
+  Statement: [
+    {
+      Action: 'sts:AssumeRole',
+      Condition: { StringEquals: { 'aws:SourceAccount': { Ref: 'AWS::AccountId' } } },
+      Effect: 'Allow',
+      Principal: { Service: 'scheduler.amazonaws.com' },
+    },
+  ],
+};
+
 function getParameterArn(name: string): unknown {
   return {
     'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, ':ssm:', { Ref: 'AWS::Region' }, ':', { Ref: 'AWS::AccountId' }, `:parameter${name}`]],
@@ -50,16 +67,15 @@ describe('FinalWhistleStack', () => {
   });
 
   it('keeps the logs of each Lambda in its own log group, for a limited time', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 2);
+    template.resourceCountIs('AWS::Logs::LogGroup', 3);
     template.allResourcesProperties('AWS::Logs::LogGroup', { RetentionInDays: 30 });
   });
 
-  it('attaches no managed policy to any Lambda role', () => {
-    template.resourceCountIs('AWS::IAM::Role', 2);
-    template.allResourcesProperties('AWS::IAM::Role', {
-      AssumeRolePolicyDocument: { Statement: [Match.objectLike({ Principal: { Service: 'lambda.amazonaws.com' } })] },
-      ManagedPolicyArns: Match.absent(),
-    });
+  it('gives each Lambda and each kind of schedule its own role, with no managed policy', () => {
+    template.resourceCountIs('AWS::IAM::Role', 5);
+    template.allResourcesProperties('AWS::IAM::Role', { ManagedPolicyArns: Match.absent() });
+    template.resourcePropertiesCountIs('AWS::IAM::Role', { AssumeRolePolicyDocument: LAMBDA_TRUST }, 3);
+    template.resourcePropertiesCountIs('AWS::IAM::Role', { AssumeRolePolicyDocument: SCHEDULER_TRUST }, 2);
   });
 });
 
@@ -151,5 +167,87 @@ describe('sent-matches table', () => {
       UpdateReplacePolicy: 'Retain',
       Properties: Match.objectLike({ DeletionProtectionEnabled: true }),
     });
+  });
+});
+
+describe('match checks', () => {
+  it('have their own schedule group', () => {
+    template.resourceCountIs('AWS::Scheduler::ScheduleGroup', 1);
+    template.hasResourceProperties('AWS::Scheduler::ScheduleGroup', { Name: 'final-whistle-match-checks' });
+  });
+
+  it('invoke fetch-results with a role that can do nothing else', () => {
+    expect(getProperties('AWS::IAM::Role', 'MatchChecks')).toMatchObject({ AssumeRolePolicyDocument: SCHEDULER_TRUST });
+    expectPolicyStatements('MatchChecks', [
+      {
+        Action: 'lambda:InvokeFunction',
+        Effect: 'Allow',
+        Resource: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'FetchResults'), 'Arn'] },
+      },
+    ]);
+  });
+});
+
+describe('planner', () => {
+  it('runs on Node.js 24, arm64, 256 MB, with where to send match checks in its environment', () => {
+    expect(getProperties('AWS::Lambda::Function', 'Planner')).toMatchObject({
+      Runtime: 'nodejs24.x',
+      Architectures: ['arm64'],
+      Timeout: 30,
+      MemorySize: 256,
+      Environment: {
+        Variables: {
+          MATCH_CHECK_SCHEDULE_GROUP: 'final-whistle-match-checks',
+          MATCH_CHECK_FUNCTION_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'FetchResults'), 'Arn'] },
+          MATCH_CHECK_ROLE_ARN: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+        },
+      },
+      LoggingConfig: { LogGroup: { Ref: getLogicalId('AWS::Logs::LogGroup', 'Planner') } },
+    });
+  });
+
+  it('may only write its logs, create schedules in the match check group, and pass their role to Scheduler', () => {
+    expectPolicyStatements('PlannerRoleDefaultPolicy', [
+      LOG_WRITE_STATEMENT('Planner'),
+      {
+        Action: 'scheduler:CreateSchedule',
+        Effect: 'Allow',
+        Resource: {
+          'Fn::Join': [
+            '',
+            ['arn:', { Ref: 'AWS::Partition' }, ':scheduler:', { Ref: 'AWS::Region' }, ':', { Ref: 'AWS::AccountId' }, ':schedule/final-whistle-match-checks/*'],
+          ],
+        },
+      },
+      {
+        Action: 'iam:PassRole',
+        Condition: { StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' } },
+        Effect: 'Allow',
+        Resource: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'MatchChecks'), 'Arn'] },
+      },
+    ]);
+  });
+
+  it('runs every day at 10:00 Paris time, from a schedule outside the match check group', () => {
+    template.resourceCountIs('AWS::Scheduler::Schedule', 1);
+    template.hasResourceProperties('AWS::Scheduler::Schedule', {
+      ScheduleExpression: 'cron(0 10 * * ? *)',
+      ScheduleExpressionTimezone: 'Europe/Paris',
+      GroupName: Match.absent(),
+      Target: Match.objectLike({
+        Arn: { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'Planner'), 'Arn'] },
+        RoleArn: { 'Fn::GetAtt': [getLogicalId('AWS::IAM::Role', 'PlannerMorningScheduleRole'), 'Arn'] },
+      }),
+    });
+  });
+
+  it('is run by a role that may only invoke the planner', () => {
+    expect(getProperties('AWS::IAM::Role', 'PlannerMorningScheduleRole')).toMatchObject({
+      AssumeRolePolicyDocument: SCHEDULER_TRUST,
+    });
+    const plannerArn = { 'Fn::GetAtt': [getLogicalId('AWS::Lambda::Function', 'Planner'), 'Arn'] };
+    expectPolicyStatements('PlannerMorningScheduleRole', [
+      { Action: 'lambda:InvokeFunction', Effect: 'Allow', Resource: [plannerArn, { 'Fn::Join': ['', [plannerArn, ':*']] }] },
+    ]);
   });
 });
