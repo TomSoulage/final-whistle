@@ -1,19 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { checkMatch, type CheckMatchDependencies } from '../../src/fetch-results/check-match.js';
 import type { MatchLookup } from '../../src/results/match-result.js';
-import { createLogger } from '../../src/shared/logger.js';
+import { captureLogs } from '../capture-logs.js';
 
 const INPUT = { date: '2026-11-01', homeTeam: 'Carcassonne', awayTeam: 'Lézignan' };
 const MATCH_ID = '2026-11-01|Carcassonne|Lézignan';
 const RESULT = { ...INPUT, competition: 'SUPER XIII', homeScore: 22, awayScore: 18 };
 
 function setUp(lookup: Promise<MatchLookup>, publish: Promise<void> = Promise.resolve()) {
-  const lines: Record<string, unknown>[] = [];
+  const { lines, createLogger } = captureLogs();
   const dependencies = {
     getMatchResult: vi.fn<CheckMatchDependencies['getMatchResult']>(() => lookup),
     publishMatchFinished: vi.fn<CheckMatchDependencies['publishMatchFinished']>(() => publish),
-    createLogger: (context: Record<string, unknown>) =>
-      createLogger(context, (line) => lines.push(JSON.parse(line) as Record<string, unknown>)),
+    createLogger,
   };
   return { dependencies, lines };
 }
