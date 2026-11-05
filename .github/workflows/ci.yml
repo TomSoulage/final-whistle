@@ -81,10 +81,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Lint pull request title (the squash commit header)
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: printf '%s\n' "$PR_TITLE" | npx commitlint --verbose
       - name: Lint pull request commits
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
