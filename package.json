@@ -22,8 +22,8 @@
     "@commitlint/types": "21.2.3",
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.2",
-    "aws-cdk": "2.1146.1",
-    "aws-cdk-lib": "2.274.0",
+    "aws-cdk": "2.1147.0",
+    "aws-cdk-lib": "2.275.0",
     "cdk-nag": "3.0.2",
     "constructs": "10.8.1",
     "esbuild": "0.28.2",
@@ -35,10 +35,10 @@
     "vitest": "5.0.5"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "3.1156.0",
-    "@aws-sdk/client-eventbridge": "3.1156.0",
-    "@aws-sdk/client-scheduler": "3.1156.0",
-    "@aws-sdk/client-ssm": "3.1156.0",
-    "node-html-parser": "9.0.5"
+    "@aws-sdk/client-dynamodb": "3.1161.0",
+    "@aws-sdk/client-eventbridge": "3.1161.0",
+    "@aws-sdk/client-scheduler": "3.1161.0",
+    "@aws-sdk/client-ssm": "3.1161.0",
+    "node-html-parser": "9.0.6"
   }
 }
