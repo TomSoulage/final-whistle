@@ -50,6 +50,10 @@ Log of the project's structural choices. Each decision has a stable identifier (
   - **Match not found**: a match given up while still not found on the page (`match given up` with `status: "not-found"`, counted by a log metric filter). `planner` found it that morning, so `fetch-results` failing to find it for 7 attempts points to a lookup problem (a team name edited on the page, a page moved). A match given up as `not-finished` raises nothing. Assumption, not observed yet (no saved page has a postponed or cancelled match): a postponed match stays on the page without a score, so it ends as `not-finished`. If Treize Mondial removes its row instead, this alarm fires on a postponement, and it is revisited then.
   - **Planner not run**: no `planner` invocation for 26 hours (hourly invocation counts, an hour without data counting as none). The planner runs every day, even without a match, every 24 h (25 h when the clocks go back), so silence means its schedule no longer fires, which leaves no error to catch.
   - **Cost**: 3 of the 10 free alarms and 1 of the 10 free custom metrics.
+  - **Checked for real on 9 November 2026** ([#25](https://github.com/TomSoulage/final-whistle/issues/25)), with an email address subscribed by hand and confirmed (D38):
+    - **Message sent to the failure queue**: `fetch-results` was invoked asynchronously with a malformed check. After 3 invocations Lambda's on-failure destination put it in the queue (within 4 minutes), `NumberOfMessagesSent` counted it, the alarm went to ALARM, then back to OK on its own, and both emails arrived. This confirms that messages sent by Lambda are counted.
+    - **Match not found**: it fired by itself on a real case, from log to email: two matches of 8 November were given up as `not-found` after 7 attempts, the log metric filter counted them, the alarm went to ALARM and its action on the topic ran. A forced ALARM state also sent its email.
+    - **Planner not run**: only by forcing the state with `aws cloudwatch set-alarm-state`. The email arrived, but the real condition (no invocation for 26 hours) has not been observed.
 
 ### Data and secrets
 
