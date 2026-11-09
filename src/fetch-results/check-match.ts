@@ -6,8 +6,9 @@ import { planRetry } from '../scheduling/plan-check-time.js';
 import { describeError, type LogFields, type Logger } from '../shared/logger.js';
 
 const INPUT_NAME = 'fetch-results input';
-/** Logged once the attempts are used up; the match-not-found alarm counts it (D39). */
-export const MATCH_GIVEN_UP_MESSAGE = 'match given up';
+const MATCH_GIVEN_UP_MESSAGE = 'match given up';
+/** A match that left its source page is postponed or cancelled: it is dropped without an alarm (D41). */
+const MATCH_DROPPED_MESSAGE = 'match no longer on the source page, dropped';
 
 export interface CheckMatchDependencies {
   readonly getMatchResult: (key: MatchKey) => Promise<MatchLookup>;
@@ -21,7 +22,8 @@ export type MatchStatus = MatchLookup['status'];
 
 /**
  * Looks the match up and publishes MatchFinished once it is finished; otherwise schedules the next attempt,
- * until the attempts are used up (D35). Failures are logged, then rethrown for a retry.
+ * until the attempts are used up (D35) or the match leaves the source page (D41).
+ * Failures are logged, then rethrown for a retry.
  */
 export async function checkMatch(input: unknown, dependencies: CheckMatchDependencies): Promise<MatchStatus> {
   const check = parseInput(input, dependencies);
@@ -51,13 +53,17 @@ async function reportLookup(check: MatchCheck, logger: Logger, dependencies: Che
     logger.info('match finished, result published', { attempt: check.attempt, competition, homeScore, awayScore });
     return lookup.status;
   }
+  if (lookup.status === 'not-found') {
+    logger.warn(MATCH_DROPPED_MESSAGE, { attempt: check.attempt });
+    return lookup.status;
+  }
   const retry = await scheduleRetry(check, dependencies);
   if (retry === null) {
     logger.warn(MATCH_GIVEN_UP_MESSAGE, { attempt: check.attempt, status: lookup.status });
   } else if (lookup.status === 'not-finished') {
     logger.info('match not finished yet', { attempt: check.attempt, ...retry });
   } else {
-    logger.warn('match not found on the source page', { attempt: check.attempt, ...retry });
+    logger.warn('source page for the match date not available yet', { attempt: check.attempt, ...retry });
   }
   return lookup.status;
 }

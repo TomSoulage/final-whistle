@@ -5,7 +5,7 @@ import type { MatchesPage } from './parse-matches-page.js';
 /** Looks the match up on a parsed page; the page must be the one for the match date. */
 export function findMatchResult(page: MatchesPage, key: MatchKey): MatchLookup {
   if (!isPageForDate(page.day, key.date)) {
-    return { status: 'not-found' };
+    return { status: 'page-not-found' };
   }
   const match = page.matches.find(
     (candidate) => candidate.homeTeam === key.homeTeam && candidate.awayTeam === key.awayTeam,

@@ -22,11 +22,16 @@ export interface DayMatch {
   readonly kickOff: string | null;
 }
 
-/** What a source knows about a match when it is asked for its result. */
+/**
+ * What a source knows about a match when it is asked for its result. `not-found`: the source page for the
+ * match date no longer lists it (postponed or cancelled). `page-not-found`: no page for that date is
+ * available (yet), which says nothing about the match.
+ */
 export type MatchLookup =
   | { readonly status: 'finished'; readonly result: MatchResult }
   | { readonly status: 'not-finished' }
-  | { readonly status: 'not-found' };
+  | { readonly status: 'not-found' }
+  | { readonly status: 'page-not-found' };
 
 const MATCH_ID_SEPARATOR = '|';
 

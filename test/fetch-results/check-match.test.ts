@@ -80,14 +80,30 @@ describe('checkMatch', () => {
     ]);
   });
 
-  it('also schedules the next attempt for a match not found, with a warning', async () => {
+  it('drops a match that left the source page: a warning, no further attempt', async () => {
     const { dependencies, lines } = setUp(Promise.resolve({ status: 'not-found' }));
 
     await expect(checkMatch(INPUT, dependencies)).resolves.toBe('not-found');
 
+    expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
+    expect(dependencies.publishMatchFinished).not.toHaveBeenCalled();
+    expect(lines).toEqual([
+      { level: 'WARN', message: 'match no longer on the source page, dropped', matchId: MATCH_ID, attempt: 1 },
+    ]);
+  });
+
+  it('keeps checking while the source page for the match date is not there yet, with a warning', async () => {
+    const { dependencies, lines } = setUp(Promise.resolve({ status: 'page-not-found' }));
+
+    await expect(checkMatch(INPUT, dependencies)).resolves.toBe('page-not-found');
+
     expect(getScheduledCheck(dependencies).check).toEqual({ ...KEY, attempt: 2 });
     expect(lines).toEqual([
-      expect.objectContaining({ level: 'WARN', message: 'match not found on the source page', attempt: 1 }),
+      expect.objectContaining({
+        level: 'WARN',
+        message: 'source page for the match date not available yet',
+        attempt: 1,
+      }),
     ]);
   });
 
