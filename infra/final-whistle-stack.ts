@@ -29,7 +29,6 @@ export class FinalWhistleStack extends Stack {
     new NotifyFunction(this, 'Notify', { eventBus, sentMatches: createSentMatchesTable(this), failureQueue });
     new FailureAlarms(this, 'Alarms', {
       failureQueue,
-      matchCheckLogGroup: fetchResults.logGroup,
       planner: planner.lambdaFunction,
     });
   }
