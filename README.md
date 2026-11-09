@@ -17,7 +17,7 @@ It is also a side project to practise serverless and event-driven design on a re
 
 1. **Every morning**, a schedule runs the `planner` Lambda. It reads the day's kick-off times on [Treize Mondial](https://treizemondial.fr/matchs-du-jour-rugby-a-xiii/).
 2. For each match, the planner creates a **one-time schedule** about 2 hours after kick-off, never at night (23:00 to 08:00). No match, nothing is scheduled.
-3. When a schedule fires, `fetch-results` reads the result through a **source adapter** and publishes a `MatchFinished` event on an EventBridge bus. If the score is not published yet, it schedules its next check itself, waiting longer each time (1 h, 1 h, 1 h, 2 h, 4 h, then 8 h, never at night), and gives the match up after 7 checks.
+3. When a schedule fires, `fetch-results` reads the result through a **source adapter** and publishes a `MatchFinished` event on an EventBridge bus. If the score is not published yet, it schedules its next check itself, waiting longer each time (1 h, 1 h, 1 h, 2 h, 4 h, then 8 h, never at night), gives the match up after 7 checks, and stops at once if the match has left the page (postponed or cancelled).
 4. `notify` is subscribed to `MatchFinished`. For each event it:
    1. **checks** in DynamoDB that the score was not already sent,
    2. **sends** it to Telegram,
@@ -30,7 +30,7 @@ The bot token and the chat id live in SSM Parameter Store and are read once per 
 - **At-least-once delivery**: send, then record. If `notify` crashes between the two steps, the score goes out twice rather than never.
 - **Idempotence**: the DynamoDB check absorbs the duplicates caused by retries.
 - **Dead-letter queue**: an event that still fails after Lambda's retries, or that a schedule or the bus cannot deliver, lands in an SQS queue instead of disappearing.
-- **Alerting**: CloudWatch alarms (a message in the DLQ, a match never found on the page, a planner that stopped running) email me through SNS, a channel that keeps working when Telegram does not.
+- **Alerting**: CloudWatch alarms (a message in the DLQ, a planner that stopped running) email me through SNS, a channel that keeps working when Telegram does not.
 - **Traceability**: structured JSON logs carrying the match id, so one match can be followed across all Lambdas.
 - **Least privilege**: one IAM role per Lambda, limited to what it actually uses.
 
@@ -59,7 +59,7 @@ Work in progress: the diagram shows the target architecture, built one step at a
 - Done: the Treize Mondial adapter, the event bus and the `fetch-results` Lambda, which publishes `MatchFinished` once a match is finished.
 - Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it.
 - Done: the `planner` Lambda, run every day at 10:00 (Paris time): it schedules one `fetch-results` check per match, about 2 hours after kick-off and never at night. When the score is not published yet, `fetch-results` checks again later, with growing delays, up to 7 checks.
-- Done: the dead-letter queue, fed by every Lambda and every schedule or rule that invokes one, and three CloudWatch alarms that email me through SNS.
+- Done: the dead-letter queue, fed by every Lambda and every schedule or rule that invokes one, and two CloudWatch alarms that email me through SNS.
 - Done: the CloudFormation execution role of `cdk bootstrap` no longer has `AdministratorAccess`: it is limited to the AWS services this project uses, on resources named after it. A merged pull request can still create a role with any rights, so the review stays the last guard.
 - Next: the smoke test and the `prod` alias rollback.
 
