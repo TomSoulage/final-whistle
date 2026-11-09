@@ -58,10 +58,10 @@ describe('findMatchResult', () => {
     expect(lookup).toEqual({ status: 'not-found' });
   });
 
-  it('does not find a match on the page of another day', () => {
+  it('reports the page of another day as not found, not the match', () => {
     const lookup = findMatchResult(PAGE, { date: '2026-10-31', homeTeam: 'Carcassonne', awayTeam: 'Lézignan' });
 
-    expect(lookup).toEqual({ status: 'not-found' });
+    expect(lookup).toEqual({ status: 'page-not-found' });
   });
 });
 

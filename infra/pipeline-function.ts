@@ -28,12 +28,10 @@ export interface PipelineFunctionProps {
  */
 export class PipelineFunction extends Construct {
   readonly lambdaFunction: NodejsFunction;
-  readonly logGroup: LogGroup;
 
   constructor(scope: Construct, id: string, props: PipelineFunctionProps) {
     super(scope, id);
     const logGroup = new LogGroup(this, 'LogGroup', { retention: LOG_RETENTION });
-    this.logGroup = logGroup;
     const role = new Role(this, 'Role', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
       description: props.roleDescription,

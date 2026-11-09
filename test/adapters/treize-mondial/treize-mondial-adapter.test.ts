@@ -59,10 +59,10 @@ describe('getMatchResult', () => {
     expect(fetchMatchesPage).toHaveBeenNthCalledWith(2, PREVIOUS_DAY_PAGE_URL);
   });
 
-  it('does not find a match when neither page is for its date', async () => {
+  it('finds no page when neither page is for the match date', async () => {
     const lookup = await getMatchResult({ date: '2026-10-30', homeTeam: 'Angleterre', awayTeam: 'Samoa' });
 
-    expect(lookup).toEqual({ status: 'not-found' });
+    expect(lookup).toEqual({ status: 'page-not-found' });
   });
 
   it('fails with the URL of a page that cannot be parsed', async () => {

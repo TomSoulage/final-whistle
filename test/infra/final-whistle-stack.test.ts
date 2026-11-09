@@ -347,8 +347,8 @@ describe('alarms', () => {
     });
   });
 
-  it('are three, each notifying the topic only when it goes to ALARM', () => {
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 3);
+  it('are two, each notifying the topic only when it goes to ALARM', () => {
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
     template.allResourcesProperties('AWS::CloudWatch::Alarm', {
       AlarmActions: ALERT_ACTIONS(),
       OKActions: Match.absent(),
@@ -365,23 +365,6 @@ describe('alarms', () => {
       Statistic: 'Sum',
       Period: 300,
       EvaluationPeriods: 1,
-      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-      TreatMissingData: 'notBreaching',
-    });
-  });
-
-  it('count in the fetch-results logs only the matches given up as not found, not the postponed ones', () => {
-    template.resourceCountIs('AWS::Logs::MetricFilter', 1);
-    template.hasResourceProperties('AWS::Logs::MetricFilter', {
-      LogGroupName: { Ref: getLogicalId('AWS::Logs::LogGroup', 'FetchResults') },
-      FilterPattern: '{ ($.message = "match given up") && ($.status = "not-found") }',
-      MetricTransformations: [{ MetricNamespace: 'FinalWhistle', MetricName: 'MatchGivenUpNotFound', MetricValue: '1' }],
-    });
-    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: 'final-whistle-match-not-found',
-      Namespace: 'FinalWhistle',
-      MetricName: 'MatchGivenUpNotFound',
-      Statistic: 'Sum',
       ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       TreatMissingData: 'notBreaching',
     });

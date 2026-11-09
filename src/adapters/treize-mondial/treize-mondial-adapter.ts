@@ -16,7 +16,7 @@ const PAGE_URLS = [TODAY_PAGE_URL, PREVIOUS_DAY_PAGE_URL];
 /** Treize Mondial source adapter: the result of one match, normalised (D2). */
 export async function getMatchResult(key: MatchKey): Promise<MatchLookup> {
   const page = await readPageForDate(key.date);
-  return page === null ? { status: 'not-found' } : findMatchResult(page, key);
+  return page === null ? { status: 'page-not-found' } : findMatchResult(page, key);
 }
 
 /** Every match of the main page, which must be the page for `isoDate` (YYYY-MM-DD). */
