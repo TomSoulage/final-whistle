@@ -1,6 +1,7 @@
 import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import { OidcProviderNative, OpenIdConnectPrincipal, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
+import { createCloudFormationExecutionPolicy } from './cloudformation-execution-policy.js';
 
 const GITHUB_OIDC_HOST = 'token.actions.githubusercontent.com';
 const GITHUB_OIDC_AUDIENCE = 'sts.amazonaws.com';
@@ -40,6 +41,7 @@ export class GithubOidcStack extends Stack {
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+    createCloudFormationExecutionPolicy(this, CDK_BOOTSTRAP_QUALIFIER);
     this.provider = new OidcProviderNative(this, 'GithubProvider', {
       url: `https://${GITHUB_OIDC_HOST}`,
       clientIds: [GITHUB_OIDC_AUDIENCE],

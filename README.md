@@ -60,6 +60,7 @@ Work in progress: the diagram shows the target architecture, built one step at a
 - Done: the `notify` Lambda, subscribed to `MatchFinished`: it checks DynamoDB, sends the score to Telegram, then records it.
 - Done: the `planner` Lambda, run every day at 10:00 (Paris time): it schedules one `fetch-results` check per match, about 2 hours after kick-off and never at night. When the score is not published yet, `fetch-results` checks again later, with growing delays, up to 7 checks.
 - Done: the dead-letter queue, fed by every Lambda and every schedule or rule that invokes one, and three CloudWatch alarms that email me through SNS.
+- Done: the CloudFormation execution role of `cdk bootstrap` no longer has `AdministratorAccess`: it is limited to the AWS services this project uses, on resources named after it. A merged pull request can still create a role with any rights, so the review stays the last guard.
 - Next: the smoke test and the `prod` alias rollback.
 
 Progress is tracked in the [v1 milestone](https://github.com/TomSoulage/final-whistle/milestone/1).
