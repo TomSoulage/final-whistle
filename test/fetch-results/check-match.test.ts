@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { checkMatch, type CheckMatchDependencies } from '../../src/fetch-results/check-match.js';
 import type { MatchLookup } from '../../src/results/match-result.js';
+import { SourceUnavailableError } from '../../src/results/source-unavailable-error.js';
 import type { ScheduleOutcome } from '../../src/scheduling/match-schedule.js';
 import { formatParisWallClock } from '../../src/scheduling/paris-time.js';
 import { captureLogs } from '../capture-logs.js';
@@ -128,18 +129,55 @@ describe('checkMatch', () => {
     ]);
   });
 
-  it('logs a lookup failure with the match id, then rethrows it for a retry', async () => {
-    const { dependencies, lines } = setUp(Promise.reject(new Error('Treize Mondial page: HTTP 503')));
+  it('logs a source that cannot be read as an error and checks again later, without failing', async () => {
+    const { dependencies, lines } = setUp(Promise.reject(new SourceUnavailableError('Treize Mondial page: HTTP 503')));
 
-    await expect(checkMatch(INPUT, dependencies)).rejects.toThrow('HTTP 503');
+    await expect(checkMatch(INPUT, dependencies)).resolves.toBe('source-unavailable');
 
+    expect(getScheduledCheck(dependencies)).toEqual({ check: { ...KEY, attempt: 2 }, checkAt: '2026-11-01T18:00:00' });
+    expect(lines).toMatchObject([
+      {
+        level: 'ERROR',
+        message: 'source unavailable, match checked again later',
+        matchId: MATCH_ID,
+        attempt: 1,
+        nextCheckAt: '2026-11-01T18:00:00',
+        outcome: 'created',
+        error: { name: 'SourceUnavailableError', message: 'Treize Mondial page: HTTP 503' },
+      },
+    ]);
+  });
+
+  it('gives the match up after the 7th attempt when the source still cannot be read, keeping the error', async () => {
+    const { dependencies, lines } = setUp(Promise.reject(new SourceUnavailableError('Treize Mondial page: HTTP 503')));
+
+    await expect(checkMatch({ ...INPUT, attempt: 7 }, dependencies)).resolves.toBe('source-unavailable');
+
+    expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
+    expect(lines).toMatchObject([
+      {
+        level: 'ERROR',
+        message: 'source unavailable, match given up',
+        matchId: MATCH_ID,
+        attempt: 7,
+        error: { name: 'SourceUnavailableError', message: 'Treize Mondial page: HTTP 503' },
+      },
+    ]);
+  });
+
+  it('logs any other lookup failure with the match id, then rethrows it for a retry', async () => {
+    const { dependencies, lines } = setUp(Promise.reject(new Error('unexpected bug')));
+
+    await expect(checkMatch(INPUT, dependencies)).rejects.toThrow('unexpected bug');
+
+    expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
     expect(lines).toMatchObject([
       {
         level: 'ERROR',
         message: 'match check failed',
         matchId: MATCH_ID,
         attempt: 1,
-        error: { message: 'Treize Mondial page: HTTP 503' },
+        error: { message: 'unexpected bug' },
       },
     ]);
   });

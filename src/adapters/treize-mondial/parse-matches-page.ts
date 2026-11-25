@@ -9,6 +9,7 @@ import {
   parseScore,
   type PageDay,
 } from './parse-cells.js';
+import { PageLayoutError } from './page-layout-error.js';
 
 export interface PageMatch {
   readonly competition: string;
@@ -44,10 +45,10 @@ function findPageDay(rows: readonly Row[]): PageDay {
   const days = rows.map(getRowPageDay).filter((day) => day !== null);
   const [firstDay] = days;
   if (firstDay === undefined) {
-    throw new Error('day header (e.g. "SAM. 31/10") not found');
+    throw new PageLayoutError('day header (e.g. "SAM. 31/10") not found');
   }
   if (days.some((day) => day.day !== firstDay.day || day.month !== firstDay.month)) {
-    throw new Error(`several days on one page (${days.map(formatPageDay).join(', ')})`);
+    throw new PageLayoutError(`several days on one page (${days.map(formatPageDay).join(', ')})`);
   }
   return firstDay;
 }
@@ -84,7 +85,7 @@ function parseMatchRows(rows: readonly Row[]): PageMatch[] {
 
 function parseMatch(competition: string | null, homeRow: Row, awayRow: Row): PageMatch {
   if (competition === null || homeRow.length !== HOME_ROW_CELLS || awayRow.length !== AWAY_ROW_CELLS) {
-    throw new Error(
+    throw new PageLayoutError(
       `unexpected match rows in "${competition ?? 'no competition'}" ` +
         `(${String(homeRow.length)} and ${String(awayRow.length)} cells, expected ` +
         `${String(HOME_ROW_CELLS)} and ${String(AWAY_ROW_CELLS)} after a competition row)`,
@@ -93,7 +94,7 @@ function parseMatch(competition: string | null, homeRow: Row, awayRow: Row): Pag
   const [kickOff = '', status = '', homeTeam = '', homeTotal = ''] = homeRow.map(getCellText);
   const [awayTeam = '', awayTotal = ''] = awayRow.map(getCellText);
   if (homeTeam === '' || awayTeam === '') {
-    throw new Error(`match without a team name in "${competition}"`);
+    throw new PageLayoutError(`match without a team name in "${competition}"`);
   }
   return {
     competition,

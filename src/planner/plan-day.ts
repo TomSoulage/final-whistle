@@ -1,4 +1,5 @@
-import { buildMatchId, type DayMatch } from '../results/match-result.js';
+import { buildMatchId, type DayListing, type DayMatch } from '../results/match-result.js';
+import { SourceUnavailableError } from '../results/source-unavailable-error.js';
 import { FIRST_ATTEMPT, type MatchCheck } from '../scheduling/match-check.js';
 import type { ScheduleOutcome } from '../scheduling/match-schedule.js';
 import {
@@ -11,7 +12,7 @@ import { planFirstCheck } from '../scheduling/plan-check-time.js';
 import { describeError, type LogFields, type Logger } from '../shared/logger.js';
 
 export interface PlanDayDependencies {
-  readonly listDayMatches: (isoDate: string) => Promise<readonly DayMatch[]>;
+  readonly listDayMatches: (isoDate: string) => Promise<DayListing>;
   readonly scheduleMatchCheck: (check: MatchCheck, checkAt: ParisWallClock) => Promise<ScheduleOutcome>;
   readonly createLogger: (context: LogFields) => Logger;
   readonly now: () => Date;
@@ -24,13 +25,17 @@ export interface DayPlan {
 
 /**
  * Schedules one check per match of the day (D4). A match that fails does not stop the others: the run
- * fails at the end, and its retry finds the other matches already scheduled.
+ * fails at the end, and its retry finds the other matches already scheduled. A day the source cannot give
+ * is logged and planned with no match, without failing (D42).
  */
 export async function planDay(dependencies: PlanDayDependencies): Promise<DayPlan> {
   const now = dependencies.now();
   const date = getParisDate(toParisWallClock(now));
   const logger = dependencies.createLogger({ date });
   const matches = await listMatches(date, logger, dependencies);
+  if (matches === null) {
+    return { date, matchCount: 0 };
+  }
   const plannedMatches: boolean[] = [];
   for (const match of matches) {
     plannedMatches.push(await planMatch(match, now, dependencies));
@@ -43,10 +48,24 @@ export async function planDay(dependencies: PlanDayDependencies): Promise<DayPla
   return { date, matchCount: matches.length };
 }
 
-async function listMatches(date: string, logger: Logger, dependencies: PlanDayDependencies): Promise<readonly DayMatch[]> {
+/** The matches of the day; null when the source has no page for it or cannot be read (D42). */
+async function listMatches(
+  date: string,
+  logger: Logger,
+  dependencies: PlanDayDependencies,
+): Promise<readonly DayMatch[] | null> {
   try {
-    return await dependencies.listDayMatches(date);
+    const listing = await dependencies.listDayMatches(date);
+    if (listing.status === 'page-not-found') {
+      logger.info('no source page for the day, no match planned');
+      return null;
+    }
+    return listing.matches;
   } catch (error) {
+    if (error instanceof SourceUnavailableError) {
+      logger.error('source unavailable, day not planned', { error: describeError(error) });
+      return null;
+    }
     logger.error('matches of the day not read', { error: describeError(error) });
     throw error;
   }

@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchMatchesPage } from '../../../src/adapters/treize-mondial/fetch-matches-page.js';
+import { parseMatchesPage } from '../../../src/adapters/treize-mondial/parse-matches-page.js';
 import {
   getMatchResult,
   listDayMatches,
   PREVIOUS_DAY_PAGE_URL,
   TODAY_PAGE_URL,
 } from '../../../src/adapters/treize-mondial/treize-mondial-adapter.js';
+import { SourceUnavailableError } from '../../../src/results/source-unavailable-error.js';
 import { readFixture } from '../../fixtures/treize-mondial/read-fixture.js';
 
 vi.mock('../../../src/adapters/treize-mondial/fetch-matches-page.js');
+vi.mock('../../../src/adapters/treize-mondial/parse-matches-page.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../src/adapters/treize-mondial/parse-matches-page.js')>();
+  return { ...original, parseMatchesPage: vi.fn(original.parseMatchesPage) };
+});
 
 const PAGES_BY_URL = new Map([
   [TODAY_PAGE_URL, readFixture('2026-11-01-in-progress.html')],
@@ -65,27 +71,33 @@ describe('getMatchResult', () => {
     expect(lookup).toEqual({ status: 'page-not-found' });
   });
 
-  it('fails with the URL of a page that cannot be parsed', async () => {
+  it('fails as a source problem, with the URL, on a page that cannot be parsed', async () => {
     vi.mocked(fetchMatchesPage).mockResolvedValue('<p>Maintenance</p>');
 
     await expect(
       getMatchResult({ date: '2026-11-01', homeTeam: 'Liban', awayTeam: 'France' }),
-    ).rejects.toThrow(`Treize Mondial page ${TODAY_PAGE_URL}: day header`);
+    ).rejects.toMatchObject({
+      name: 'SourceUnavailableError',
+      message: expect.stringContaining(`Treize Mondial page ${TODAY_PAGE_URL}: day header`) as unknown,
+    });
   });
 
-  it('lets a download failure through, so the call can be retried', async () => {
-    vi.mocked(fetchMatchesPage).mockRejectedValue(new Error('Treize Mondial page: HTTP 503'));
+  it('lets a download failure through as a source problem, so the check is scheduled again', async () => {
+    vi.mocked(fetchMatchesPage).mockRejectedValue(new SourceUnavailableError('Treize Mondial page: HTTP 503'));
 
-    await expect(
-      getMatchResult({ date: '2026-11-01', homeTeam: 'Liban', awayTeam: 'France' }),
-    ).rejects.toThrow('HTTP 503');
+    const failure = getMatchResult({ date: '2026-11-01', homeTeam: 'Liban', awayTeam: 'France' });
+
+    await expect(failure).rejects.toThrow(SourceUnavailableError);
+    await expect(failure).rejects.toThrow('HTTP 503');
   });
 });
 
 describe('listDayMatches', () => {
   it('lists every match of the main page with its key and kick-off time', async () => {
-    const matches = await listDayMatches('2026-11-01');
+    const listing = await listDayMatches('2026-11-01');
 
+    expect(listing.status).toBe('listed');
+    const matches = listing.status === 'listed' ? listing.matches : [];
     expect(matches).toHaveLength(16);
     expect(matches).toContainEqual({
       key: { date: '2026-11-01', homeTeam: 'Australie (F)', awayTeam: 'Pays de Galles (F)' },
@@ -94,15 +106,27 @@ describe('listDayMatches', () => {
     expect(fetchMatchesPage).toHaveBeenCalledExactlyOnceWith(TODAY_PAGE_URL);
   });
 
-  it('fails when the main page shows another day', async () => {
-    await expect(listDayMatches('2026-11-02')).rejects.toThrow(
-      `Treize Mondial page ${TODAY_PAGE_URL} shows 1/11, not 2026-11-02`,
-    );
+  it('finds no page for the day while the main page still shows an earlier day', async () => {
+    await expect(listDayMatches('2026-11-02')).resolves.toEqual({ status: 'page-not-found' });
   });
 
-  it('fails with the URL of a page that cannot be parsed', async () => {
+  it('fails as a source problem, with the URL, on a page that cannot be parsed', async () => {
     vi.mocked(fetchMatchesPage).mockResolvedValue('<p>Maintenance</p>');
 
-    await expect(listDayMatches('2026-11-01')).rejects.toThrow(`Treize Mondial page ${TODAY_PAGE_URL}: day header`);
+    const failure = listDayMatches('2026-11-01');
+
+    await expect(failure).rejects.toThrow(SourceUnavailableError);
+    await expect(failure).rejects.toThrow(`Treize Mondial page ${TODAY_PAGE_URL}: day header`);
+  });
+
+  it('lets a bug of the parser through as is, so it still raises an alert', async () => {
+    vi.mocked(parseMatchesPage).mockImplementationOnce(() => {
+      throw new TypeError('bug in the parser');
+    });
+
+    const failure = listDayMatches('2026-11-01');
+
+    await expect(failure).rejects.toThrow(TypeError);
+    await expect(failure).rejects.not.toThrow(SourceUnavailableError);
   });
 });
