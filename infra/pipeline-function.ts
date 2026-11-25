@@ -1,4 +1,4 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Validations } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
@@ -54,5 +54,16 @@ export class PipelineFunction extends Construct {
       environment: { ...props.environment },
       onFailure: new SqsDestination(props.failureQueue),
     });
+    acknowledgeLatestRuntimeRule(this.lambdaFunction);
   }
+}
+
+/** cdk-nag `L1` also counts runtimes still in preview on Lambda, which are not meant for production (D20). */
+function acknowledgeLatestRuntimeRule(lambdaFunction: NodejsFunction): void {
+  Validations.of(lambdaFunction).acknowledge({
+    id: 'AwsSolutions::AwsSolutions-L1',
+    reason:
+      'Node.js 24 is the latest Node.js runtime generally available on Lambda; newer ones are still in preview. ' +
+      'Remove this once a newer runtime is generally available.',
+  });
 }
