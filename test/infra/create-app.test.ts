@@ -1,4 +1,4 @@
-import type { Stack } from 'aws-cdk-lib';
+import { Stack } from 'aws-cdk-lib';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { describe, expect, it } from 'vitest';
 import { APP_STACK_ID, createApp } from '../../infra/create-app.js';
@@ -7,7 +7,11 @@ import { APP_STACK_ID, createApp } from '../../infra/create-app.js';
 const SYNTH_TIMEOUT_MS = 30_000;
 
 function getAppStack(app: ReturnType<typeof createApp>): Stack {
-  return app.node.findChild(APP_STACK_ID) as Stack;
+  const child = app.node.findChild(APP_STACK_ID);
+  if (!Stack.isStack(child)) {
+    throw new Error(`Child ${APP_STACK_ID} of the app is not a stack`);
+  }
+  return child;
 }
 
 describe('createApp', () => {
