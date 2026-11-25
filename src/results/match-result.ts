@@ -33,6 +33,11 @@ export type MatchLookup =
   | { readonly status: 'not-found' }
   | { readonly status: 'page-not-found' };
 
+/** The matches of a day; `page-not-found`: the source has no page for that day yet, so no match today (D42). */
+export type DayListing =
+  | { readonly status: 'listed'; readonly matches: readonly DayMatch[] }
+  | { readonly status: 'page-not-found' };
+
 const MATCH_ID_SEPARATOR = '|';
 
 /** Builds the idempotence key, e.g. `2026-10-30|Angleterre|Papouasie-Nouvelle-Guinée` (D8). */

@@ -1,7 +1,8 @@
-import type { DayMatch, MatchKey, MatchLookup } from '../../results/match-result.js';
+import type { DayListing, MatchKey, MatchLookup } from '../../results/match-result.js';
+import { SourceUnavailableError } from '../../results/source-unavailable-error.js';
 import { fetchMatchesPage } from './fetch-matches-page.js';
 import { findMatchResult, isPageForDate } from './find-match-result.js';
-import { formatPageDay } from './parse-cells.js';
+import { PageLayoutError } from './page-layout-error.js';
 import { parseMatchesPage, type MatchesPage } from './parse-matches-page.js';
 
 export const TODAY_PAGE_URL = 'https://treizemondial.fr/matchs-du-jour-rugby-a-xiii/';
@@ -19,16 +20,17 @@ export async function getMatchResult(key: MatchKey): Promise<MatchLookup> {
   return page === null ? { status: 'page-not-found' } : findMatchResult(page, key);
 }
 
-/** Every match of the main page, which must be the page for `isoDate` (YYYY-MM-DD). */
-export async function listDayMatches(isoDate: string): Promise<DayMatch[]> {
+/** Every match of the main page; `page-not-found` when it shows another day than `isoDate` (YYYY-MM-DD). */
+export async function listDayMatches(isoDate: string): Promise<DayListing> {
   const page = parsePage(TODAY_PAGE_URL, await fetchMatchesPage(TODAY_PAGE_URL));
   if (!isPageForDate(page.day, isoDate)) {
-    throw new Error(`Treize Mondial page ${TODAY_PAGE_URL} shows ${formatPageDay(page.day)}, not ${isoDate}`);
+    return { status: 'page-not-found' };
   }
-  return page.matches.map(({ homeTeam, awayTeam, kickOff }) => ({
+  const matches = page.matches.map(({ homeTeam, awayTeam, kickOff }) => ({
     key: { date: isoDate, homeTeam, awayTeam },
     kickOff,
   }));
+  return { status: 'listed', matches };
 }
 
 /** Reads the pages in order and stops at the first one for the date; most calls need one request. */
@@ -42,11 +44,14 @@ async function readPageForDate(isoDate: string): Promise<MatchesPage | null> {
   return null;
 }
 
+/** Only a page of an unexpected shape is a problem of the source; any other error is a bug and is let through. */
 function parsePage(url: string, html: string): MatchesPage {
   try {
     return parseMatchesPage(html);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Treize Mondial page ${url}: ${reason}`, { cause: error });
+    if (!(error instanceof PageLayoutError)) {
+      throw error;
+    }
+    throw new SourceUnavailableError(`Treize Mondial page ${url}: ${error.message}`, { cause: error });
   }
 }

@@ -1,3 +1,5 @@
+import { SourceUnavailableError } from '../../results/source-unavailable-error.js';
+
 const FETCH_TIMEOUT_MS = 10_000;
 export const USER_AGENT = 'final-whistle (+https://github.com/TomSoulage/final-whistle)';
 
@@ -8,7 +10,7 @@ export async function fetchMatchesPage(url: string): Promise<string> {
     fetch(url, { headers: { 'user-agent': USER_AGENT }, signal }),
   );
   if (!response.ok) {
-    throw new Error(`Treize Mondial page ${url}: HTTP ${String(response.status)}`);
+    throw new SourceUnavailableError(`Treize Mondial page ${url}: HTTP ${String(response.status)}`);
   }
   return withRequestContext(url, () => response.text());
 }
@@ -18,6 +20,6 @@ async function withRequestContext<T>(url: string, step: () => Promise<T>): Promi
   try {
     return await step();
   } catch (error) {
-    throw new Error(`Treize Mondial page ${url}: request failed`, { cause: error });
+    throw new SourceUnavailableError(`Treize Mondial page ${url}: request failed`, { cause: error });
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchMatchesPage, USER_AGENT } from '../../../src/adapters/treize-mondial/fetch-matches-page.js';
+import { SourceUnavailableError } from '../../../src/results/source-unavailable-error.js';
 
 const MATCHES_PAGE_URL = 'https://treizemondial.fr/matchs-du-jour-rugby-a-xiii/';
 
@@ -24,19 +25,21 @@ describe('fetchMatchesPage', () => {
     expect(USER_AGENT).toContain('final-whistle');
   });
 
-  it('fails with the URL and status on an HTTP error', async () => {
+  it('fails as a source problem, with the URL and status, on an HTTP error', async () => {
     stubFetch(() => Promise.resolve(new Response('', { status: 503 })));
 
-    await expect(fetchMatchesPage(MATCHES_PAGE_URL)).rejects.toThrow(
-      `Treize Mondial page ${MATCHES_PAGE_URL}: HTTP 503`,
-    );
+    const failure = fetchMatchesPage(MATCHES_PAGE_URL);
+
+    await expect(failure).rejects.toThrow(SourceUnavailableError);
+    await expect(failure).rejects.toThrow(`Treize Mondial page ${MATCHES_PAGE_URL}: HTTP 503`);
   });
 
-  it('fails with the URL and keeps the cause when the request itself fails', async () => {
+  it('fails as a source problem, with the URL and the cause, when the request itself fails', async () => {
     const networkError = new TypeError('fetch failed');
     stubFetch(() => Promise.reject(networkError));
 
     await expect(fetchMatchesPage(MATCHES_PAGE_URL)).rejects.toMatchObject({
+      name: 'SourceUnavailableError',
       message: `Treize Mondial page ${MATCHES_PAGE_URL}: request failed`,
       cause: networkError,
     });

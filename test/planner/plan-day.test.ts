@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { planDay, type PlanDayDependencies } from '../../src/planner/plan-day.js';
-import type { DayMatch } from '../../src/results/match-result.js';
+import type { DayListing, DayMatch } from '../../src/results/match-result.js';
+import { SourceUnavailableError } from '../../src/results/source-unavailable-error.js';
 import { formatParisWallClock } from '../../src/scheduling/paris-time.js';
 import { captureLogs } from '../capture-logs.js';
 
@@ -15,13 +16,17 @@ const UNTIMED_MATCH: DayMatch = {
   kickOff: null,
 };
 
+function listed(matches: readonly DayMatch[]): Promise<DayListing> {
+  return Promise.resolve({ status: 'listed', matches });
+}
+
 function setUp(
-  matches: Promise<readonly DayMatch[]>,
+  listing: Promise<DayListing>,
   scheduleMatchCheck: PlanDayDependencies['scheduleMatchCheck'] = () => Promise.resolve('created'),
 ) {
   const { lines, createLogger } = captureLogs();
   const dependencies = {
-    listDayMatches: vi.fn<PlanDayDependencies['listDayMatches']>(() => matches),
+    listDayMatches: vi.fn<PlanDayDependencies['listDayMatches']>(() => listing),
     scheduleMatchCheck: vi.fn(scheduleMatchCheck),
     createLogger,
     now: () => NOW,
@@ -31,7 +36,7 @@ function setUp(
 
 describe('planDay', () => {
   it('schedules a first check 2 h after kick-off for each match of the Paris day', async () => {
-    const { dependencies, lines } = setUp(Promise.resolve([AFTERNOON_MATCH]));
+    const { dependencies, lines } = setUp(listed([AFTERNOON_MATCH]));
 
     await expect(planDay(dependencies)).resolves.toEqual({ date: '2026-11-01', matchCount: 1 });
 
@@ -53,7 +58,7 @@ describe('planDay', () => {
   });
 
   it('warns when the kick-off time is missing and checks at the fallback time', async () => {
-    const { dependencies, lines } = setUp(Promise.resolve([UNTIMED_MATCH]));
+    const { dependencies, lines } = setUp(listed([UNTIMED_MATCH]));
 
     await planDay(dependencies);
 
@@ -67,7 +72,7 @@ describe('planDay', () => {
   });
 
   it('logs a match already scheduled as such, so the planner can run twice', async () => {
-    const { dependencies, lines } = setUp(Promise.resolve([AFTERNOON_MATCH]), () =>
+    const { dependencies, lines } = setUp(listed([AFTERNOON_MATCH]), () =>
       Promise.resolve('already-scheduled'),
     );
 
@@ -77,7 +82,7 @@ describe('planDay', () => {
   });
 
   it('schedules nothing on a day without matches', async () => {
-    const { dependencies, lines } = setUp(Promise.resolve([]));
+    const { dependencies, lines } = setUp(listed([]));
 
     await expect(planDay(dependencies)).resolves.toEqual({ date: '2026-11-01', matchCount: 0 });
 
@@ -86,7 +91,7 @@ describe('planDay', () => {
   });
 
   it('schedules the other matches when one fails, then fails for a retry', async () => {
-    const { dependencies, lines } = setUp(Promise.resolve([AFTERNOON_MATCH, UNTIMED_MATCH]), (key) =>
+    const { dependencies, lines } = setUp(listed([AFTERNOON_MATCH, UNTIMED_MATCH]), (key) =>
       key.homeTeam === 'Carcassonne' ? Promise.reject(new Error('throttled')) : Promise.resolve('created'),
     );
 
@@ -106,7 +111,7 @@ describe('planDay', () => {
 
   it('logs an impossible kick-off time with the match id and still schedules the other matches', async () => {
     const impossibleMatch: DayMatch = { ...AFTERNOON_MATCH, kickOff: '25:00' };
-    const { dependencies, lines } = setUp(Promise.resolve([impossibleMatch, UNTIMED_MATCH]));
+    const { dependencies, lines } = setUp(listed([impossibleMatch, UNTIMED_MATCH]));
 
     await expect(planDay(dependencies)).rejects.toThrow('1 of 2 match checks not scheduled for 2026-11-01');
 
@@ -121,10 +126,35 @@ describe('planDay', () => {
     );
   });
 
-  it('logs a page that cannot be read, then rethrows it for a retry', async () => {
-    const { dependencies, lines } = setUp(Promise.reject(new Error('page shows 31/10, not 2026-11-01')));
+  it('plans no match, without failing, while the source has no page for the day', async () => {
+    const { dependencies, lines } = setUp(Promise.resolve({ status: 'page-not-found' }));
 
-    await expect(planDay(dependencies)).rejects.toThrow('page shows 31/10');
+    await expect(planDay(dependencies)).resolves.toEqual({ date: '2026-11-01', matchCount: 0 });
+
+    expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
+    expect(lines).toEqual([{ level: 'INFO', message: 'no source page for the day, no match planned', date: '2026-11-01' }]);
+  });
+
+  it('logs a source that cannot be read as an error, without failing, so no alert is raised', async () => {
+    const { dependencies, lines } = setUp(Promise.reject(new SourceUnavailableError('Treize Mondial page: HTTP 503')));
+
+    await expect(planDay(dependencies)).resolves.toEqual({ date: '2026-11-01', matchCount: 0 });
+
+    expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
+    expect(lines).toMatchObject([
+      {
+        level: 'ERROR',
+        message: 'source unavailable, day not planned',
+        date: '2026-11-01',
+        error: { name: 'SourceUnavailableError', message: 'Treize Mondial page: HTTP 503' },
+      },
+    ]);
+  });
+
+  it('logs any other failure to list the day, then rethrows it for a retry', async () => {
+    const { dependencies, lines } = setUp(Promise.reject(new Error('unexpected bug')));
+
+    await expect(planDay(dependencies)).rejects.toThrow('unexpected bug');
 
     expect(dependencies.scheduleMatchCheck).not.toHaveBeenCalled();
     expect(lines).toEqual([

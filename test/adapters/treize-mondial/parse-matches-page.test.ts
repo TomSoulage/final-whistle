@@ -3,6 +3,7 @@ import {
   parseMatchesPage,
   type PageMatch,
 } from '../../../src/adapters/treize-mondial/parse-matches-page.js';
+import { PageLayoutError } from '../../../src/adapters/treize-mondial/page-layout-error.js';
 import { readFixture } from '../../fixtures/treize-mondial/read-fixture.js';
 
 function findMatch(matches: readonly PageMatch[], homeTeam: string): PageMatch | undefined {
@@ -97,6 +98,7 @@ describe('parseMatchesPage on unusual pages', () => {
 
   it('fails when the day header is missing', () => {
     expect(() => parseMatchesPage('<p>Maintenance</p>')).toThrow('day header');
+    expect(() => parseMatchesPage('<p>Maintenance</p>')).toThrow(PageLayoutError);
   });
 
   it('fails on a page covering several days', () => {
